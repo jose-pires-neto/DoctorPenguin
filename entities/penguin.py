@@ -1,0 +1,296 @@
+import pygame
+import random
+import time
+import math
+from config import SCREEN_WIDTH, SCREEN_HEIGHT
+from entities.drawer import PenguinDrawer
+from ui.components import DialogueBubble
+from ui.menu import ContextMenu
+
+# Constantes de Movimentação e Física
+WANDER_MIN_TIME = 2000
+WANDER_MAX_TIME = 6000
+SPEED = 1.5
+GRAVITY = 0.5
+BOUNCE_DAMPING = 0.6
+FRICTION = 0.95
+
+class Penguin:
+    def __init__(self, x, y):
+        self.x = x
+        self.y = y
+        self.vx = 0
+        self.vy = 0
+        
+        self.drawer = PenguinDrawer()
+        self.bubble = DialogueBubble("", x, y, 280, 100)
+        self.menu = ContextMenu()
+        
+        # Estados: WANDERING, HELD, THROWN, ALERT, POKED, IDLE, GRUMPY, HAPPY, CLEANING
+        self.state = "WANDERING"
+        self.wander_substate = "WANDERING" # WANDERING, IDLE_STANDING, SITTING
+        self.substate_expire_time = pygame.time.get_ticks() + random.randint(WANDER_MIN_TIME, WANDER_MAX_TIME)
+        
+        self.direction_idx = 0
+        self.dest_x = x
+        self.dest_y = y
+        
+        # Física
+        self.is_held = False
+        self.hold_offset_x = 0
+        self.hold_offset_y = 0
+        self.last_mouse_pos = (x, y)
+        
+        # Controle de cutucadas e idle
+        self.last_action_time = time.time()
+        
+        # Callbacks (definidos pelo main)
+        self.on_checkup_request = None
+        self.on_exit_request = None
+
+    def set_alert(self, text, buttons):
+        """Inicia um alerta do sistema"""
+        self.state = "ALERT"
+        self.bubble.set_text(text)
+        self.bubble.add_buttons(buttons)
+        
+    def set_state(self, new_state):
+        self.state = new_state
+        if new_state in ["WANDERING", "THROWN", "HELD"]:
+            self.bubble.set_text("")
+            self.bubble.buttons.clear()
+            
+    def poke(self):
+        """Reação ao clique rápido"""
+        self.state = "POKED"
+        phrases = [
+            "Pare com isso!",
+            "Isso dói, sabia?",
+            "Estou trabalhando, humano!",
+            "Mais um clique e eu formato o PC!",
+            "Por que você me cutuca?!"
+        ]
+        self.bubble.set_text(random.choice(phrases))
+        self.bubble.add_buttons([])
+        self.last_action_time = time.time()
+        # Volta a passear depois de 3 segundos (gerenciado no update)
+
+    def handle_event(self, event, mouse_pos):
+        hitbox = self.drawer.get_hitbox(self.x, self.y)
+        mouse_over = hitbox.collidepoint(mouse_pos)
+        
+        # 1. Trata clique na Bubble
+        if self.state in ["ALERT", "POKED", "GRUMPY", "HAPPY", "CLEANING", "IDLE"]:
+            if self.bubble.handle_event(event, mouse_pos):
+                return True # Evento consumido
+                
+        # 2. Trata clique no Menu
+        if self.menu.handle_event(event, mouse_pos):
+            return True
+            
+        # 3. Trata interações físicas com o Pinguim
+        if event.type == pygame.MOUSEBUTTONDOWN:
+            if event.button == 1: # Clique Esquerdo
+                if mouse_over:
+                    self.is_held = True
+                    self.state = "HELD"
+                    self.hold_offset_x = self.x - mouse_pos[0]
+                    self.hold_offset_y = self.y - mouse_pos[1]
+                    self.vx = 0
+                    self.vy = 0
+                    self.bubble.set_text(random.choice(["Me solta!", "Socorro!", "Eu tenho labirintite!"]))
+                    self.bubble.add_buttons([])
+                    self.menu.hide()
+                    return True
+            elif event.button == 3: # Clique Direito
+                if mouse_over:
+                    self.menu.show(mouse_pos[0], mouse_pos[1], [
+                        {'text': 'Fazer Checkup', 'callback': self._trigger_checkup},
+                        {'text': 'Dormir (Sair)', 'callback': self._trigger_exit}
+                    ])
+                    return True
+                    
+        elif event.type == pygame.MOUSEBUTTONUP:
+            if event.button == 1 and self.is_held:
+                self.is_held = False
+                
+                # Se mal se moveu e soltou rápido, é um poke!
+                speed = math.hypot(self.vx, self.vy)
+                if speed < 2.0:
+                    self.poke()
+                else:
+                    self.state = "THROWN"
+                    self.bubble.set_text("WAAAHHH!")
+                return True
+                
+        return False
+
+    def _trigger_checkup(self):
+        self.menu.hide()
+        if self.on_checkup_request:
+            self.on_checkup_request()
+            
+    def _trigger_exit(self):
+        self.menu.hide()
+        if self.on_exit_request:
+            self.on_exit_request()
+
+    def update(self, mouse_pos):
+        now = pygame.time.get_ticks()
+        
+        # 1. Atualiza Física (Arrastar e Arremessar)
+        if self.is_held:
+            # Segue o mouse
+            new_x = mouse_pos[0] + self.hold_offset_x
+            new_y = mouse_pos[1] + self.hold_offset_y
+            # Calcula velocidade baseada no movimento do mouse
+            self.vx = (new_x - self.x) * 0.5
+            self.vy = (new_y - self.y) * 0.5
+            self.x = new_x
+            self.y = new_y
+            
+            # Limita a tela
+            self.x = max(40, min(self.x, SCREEN_WIDTH - 40))
+            self.y = max(40, min(self.y, SCREEN_HEIGHT - 40))
+            
+            # Animação de desespero (muda frame rapidamente)
+            self.direction_idx = (now // 100) % 8
+            
+        elif self.state == "THROWN":
+            # Aplica gravidade e inércia
+            self.vy += GRAVITY
+            self.x += self.vx
+            self.y += self.vy
+            
+            # Atrito horizontal
+            self.vx *= 0.99
+            
+            # Quica nas bordas
+            if self.y >= SCREEN_HEIGHT - 40:
+                self.y = SCREEN_HEIGHT - 40
+                self.vy = -self.vy * BOUNCE_DAMPING
+                self.vx *= FRICTION # Atrito no chão
+            if self.x <= 40:
+                self.x = 40
+                self.vx = -self.vx * BOUNCE_DAMPING
+            elif self.x >= SCREEN_WIDTH - 40:
+                self.x = SCREEN_WIDTH - 40
+                self.vx = -self.vx * BOUNCE_DAMPING
+                
+            # Gira loucamente enquanto cai rápido
+            if abs(self.vx) > 3 or abs(self.vy) > 3:
+                self.direction_idx = (now // 100) % 8
+            else:
+                self.direction_idx = 0 # Olha pra frente
+                
+            # Se parar quase totalmente, volta a passear
+            if abs(self.vx) < 0.5 and abs(self.vy) < 0.5 and self.y >= SCREEN_HEIGHT - 45:
+                self.state = "WANDERING"
+                self.vx = 0
+                self.vy = 0
+                self.bubble.set_text("")
+                self.last_action_time = time.time()
+                
+        # 2. Atualiza Lógica de Passeio (Wandering)
+        elif self.state == "WANDERING":
+            if now > self.substate_expire_time:
+                # Sorteia próximo subestado
+                r = random.random()
+                if r < 0.5:
+                    self.wander_substate = "WANDERING"
+                    self.dest_x = random.randint(100, SCREEN_WIDTH - 100)
+                    self.dest_y = random.randint(100, SCREEN_HEIGHT - 100)
+                elif r < 0.8:
+                    self.wander_substate = "IDLE_STANDING"
+                else:
+                    self.wander_substate = "SITTING"
+                self.substate_expire_time = now + random.randint(WANDER_MIN_TIME, WANDER_MAX_TIME)
+                
+            if self.wander_substate == "WANDERING":
+                dx = self.dest_x - self.x
+                dy = self.dest_y - self.y
+                dist = math.hypot(dx, dy)
+                
+                if dist > SPEED:
+                    move_x = (dx / dist) * SPEED
+                    move_y = (dy / dist) * SPEED
+                    self.x += move_x
+                    self.y += move_y
+                    
+                    angle = math.degrees(math.atan2(-dy, dx))
+                    if angle < 0:
+                        angle += 360
+                    # angle 0 is Right(East).
+                    # sprite columns: 0:S, 1:SW, 2:W, 3:NW, 4:N, 5:NE, 6:E, 7:SE
+                    sector = int(((angle + 22.5) % 360) / 45)
+                    sector_to_idx = {
+                        0: 6, 1: 5, 2: 4, 3: 3,
+                        4: 2, 5: 1, 6: 0, 7: 7
+                    }
+                    self.direction_idx = sector_to_idx.get(sector, 0)
+                else:
+                    self.wander_substate = "IDLE_STANDING"
+                    
+            # Chance de dormir ou dar dica
+            if self.wander_substate in ["IDLE_STANDING", "SITTING"] and time.time() - self.last_action_time > 10:
+                if random.random() < 0.05:
+                    self.state = "IDLE"
+                    self.bubble.set_text(random.choice([
+                        "Zzz...", 
+                        "Dica: Reiniciar resolve 90% dos problemas.",
+                        "Lembre de beber água!",
+                        "Eu sou open source, sabia?"
+                    ]))
+                    self.last_action_time = time.time()
+                    self.substate_expire_time = now + 4000
+                    
+        elif self.state == "IDLE" or self.state == "POKED":
+            if now > self.substate_expire_time:
+                self.state = "WANDERING"
+                self.bubble.set_text("")
+                self.last_action_time = time.time()
+
+        # 3. Atualiza interface (Balão e Botões)
+        # Posiciona balão dinamicamente
+        ideal_bx = self.x - self.bubble.width / 2
+        ideal_by = self.y - self.bubble.max_height - 90
+        
+        ideal_bx = max(10, min(ideal_bx, SCREEN_WIDTH - self.bubble.width - 10))
+        ideal_by = max(10, min(ideal_by, SCREEN_HEIGHT - self.bubble.max_height - 10))
+        
+        self.bubble.x = ideal_bx
+        self.bubble.y = ideal_by
+        self.bubble.update(mouse_pos)
+        
+        self.menu.update(mouse_pos)
+        
+        self.last_mouse_pos = mouse_pos
+
+    def is_ui_active(self):
+        """Retorna True se tiver um balão interativo ou menu aberto."""
+        return (self.state in ["ALERT", "POKED", "GRUMPY", "HAPPY", "CLEANING", "IDLE"] and self.bubble.current_text != "") or self.menu.is_open
+
+    def get_ui_hitboxes(self):
+        hitboxes = [self.drawer.get_hitbox(self.x, self.y)]
+        if self.is_ui_active():
+            if self.bubble.current_text != "":
+                hitboxes.append(self.bubble.get_hitbox())
+            if self.menu.is_open:
+                hitboxes.append(self.menu.get_hitbox())
+        return hitboxes
+
+    def draw(self, screen, mouse_pos):
+        # Transforma o estado do Penguin no estado visual do Drawer
+        visual_state = self.state
+        if self.state == "WANDERING":
+            visual_state = self.wander_substate
+        elif self.state == "HELD" or self.state == "THROWN":
+            visual_state = "WANDERING" # Usa quadros de caminhada
+            
+        self.drawer.draw(screen, self.x, self.y, visual_state, mouse_pos, self.direction_idx)
+        
+        if self.bubble.current_text != "":
+            self.bubble.draw(screen)
+            
+        if self.menu.is_open:
+            self.menu.draw(screen)

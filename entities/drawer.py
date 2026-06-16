@@ -21,7 +21,7 @@ class PenguinDrawer:
     def load_spritesheet(self):
         """Carrega e fatia a folha de sprites do Club Penguin.
         Se falhar, mantém self.sprites = None para ativar o fallback procedural."""
-        base_dir = os.path.dirname(os.path.abspath(__file__))
+        base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         full_path = os.path.join(base_dir, SPRITESHEET_PATH)
         
         if not os.path.exists(full_path):
