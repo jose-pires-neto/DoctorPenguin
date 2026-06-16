@@ -177,8 +177,8 @@ def main():
 
         # 1.5. Monitor de Ócio (Ergonomia)
         idle_secs = monitor.get_idle_time()
-        # Se ficar mais de 8 segundos inativo, o pinguim dorme.
-        if idle_secs >= 8.0:
+        # Se ficar mais de 3 minutos inativo, o pinguim dorme.
+        if idle_secs >= 180.0:
             if penguin.state in ["WANDERING", "IDLE"] and penguin.prop != "ZZZ":
                 penguin.set_state("IDLE")
                 penguin.prop = "ZZZ"
