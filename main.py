@@ -175,6 +175,33 @@ def main():
             
         penguin.on_alert_ignored = lambda: handle_ignore("TIMEOUT", None)
 
+        # 1.5. Monitor de Ócio (Ergonomia)
+        idle_secs = monitor.get_idle_time()
+        # Se ficar mais de 8 segundos inativo, o pinguim dorme.
+        if idle_secs >= 8.0:
+            if penguin.state in ["WANDERING", "IDLE"] and penguin.prop != "ZZZ":
+                penguin.set_state("IDLE")
+                penguin.prop = "ZZZ"
+                penguin.bubble.set_text("Zzz... Mestre foi embora...")
+                penguin.bubble.add_buttons([])
+                penguin.sleep_bubble_timer = time.time() + 3
+            if penguin.prop == "ZZZ" and penguin.state == "IDLE":
+                # Força a ficar dormindo
+                penguin.substate_expire_time = pygame.time.get_ticks() + 1000
+                # Apaga o balão de fala depois de 3 segundos
+                if hasattr(penguin, 'sleep_bubble_timer') and time.time() > penguin.sleep_bubble_timer:
+                    if penguin.bubble.current_text != "":
+                        penguin.bubble.set_text_instant("")
+        else:
+            # Acorda se mexer o mouse/teclado
+            if penguin.state == "IDLE" and penguin.prop == "ZZZ":
+                penguin.set_state("HAPPY")
+                penguin.prop = None
+                penguin.audio.play('quack')
+                penguin.bubble.set_text("Opa! Voltou a trabalhar!")
+                penguin.bubble.add_buttons([])
+                penguin.substate_expire_time = pygame.time.get_ticks() + 3000
+
         # 2. CAPTURA DE EVENTOS
         mouse_pos = get_mouse_pos()
         for event in pygame.event.get():

@@ -33,9 +33,9 @@ class Penguin:
         self.prop = None # None, "BROOM", "ZZZ", "STETHOSCOPE", "GLASSES"
         self.color = self.save_manager.get_penguin_color()
         self.drawer = PenguinDrawer(body_color=self.color)
-        self.bubble = DialogueBubble("", x, y, 280, 100)
-        self.menu = ContextMenu()
         self.audio = AudioSystem()
+        self.bubble = DialogueBubble("", x, y, 280, 100, audio_system=self.audio)
+        self.menu = ContextMenu()
         
         # Atributos de Tamagotchi
         self.happiness = 100
@@ -138,10 +138,12 @@ class Penguin:
                             {'text': 'Cancelar Foco', 'callback': self._cancel_pomodoro}
                         ])
                     else:
+                        mute_text = 'Desmutar Som' if self.audio.muted else 'Mutar Som'
                         options = [
                             {'text': 'Soneca', 'callback': self._snooze},
                             {'text': 'Focar (25 min)', 'callback': self._start_pomodoro},
                             {'text': 'Fazer Checkup', 'callback': self._trigger_checkup},
+                            {'text': mute_text, 'callback': self._toggle_mute},
                             {'text': 'Mudar Cor', 'callback': self._change_color},
                             {'text': 'Fazer Carinho', 'callback': self._pet},
                             {'text': f'Dar Peixe ({fishes} restando)', 'callback': self._feed},
@@ -232,6 +234,16 @@ class Penguin:
         self.menu.hide()
         if self.on_exit_request:
             self.on_exit_request()
+            
+    def _toggle_mute(self):
+        self.menu.hide()
+        is_muted = self.audio.toggle_mute()
+        self.set_state("HAPPY")
+        if not is_muted:
+            self.audio.play('quack')
+        self.bubble.set_text("Mudo ativado!" if is_muted else "Sons ativados!")
+        self.bubble.add_buttons([])
+        self.substate_expire_time = pygame.time.get_ticks() + 3000
             
     def _change_color(self):
         self.menu.hide()
@@ -496,6 +508,8 @@ class Penguin:
         visual_state = self.state
         if self.state == "WANDERING":
             visual_state = self.wander_substate
+        elif self.state == "IDLE" and self.prop == "ZZZ":
+            visual_state = "SITTING"
         elif self.state == "HELD" or self.state == "THROWN":
             visual_state = "WANDERING" # Usa quadros de caminhada
             

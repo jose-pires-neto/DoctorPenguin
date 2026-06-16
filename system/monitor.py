@@ -13,6 +13,12 @@ class SHQUERYRBINFO(ctypes.Structure):
         ("i64NumItems", ctypes.c_int64)
     ]
 
+class LASTINPUTINFO(ctypes.Structure):
+    _fields_ = [
+        ("cbSize", ctypes.c_uint),
+        ("dwTime", ctypes.c_uint)
+    ]
+
 class SystemMonitor:
     def __init__(self):
         self._temp_size = 0
@@ -21,6 +27,19 @@ class SystemMonitor:
         
         # Inicia a primeira varredura de temporários em background
         self.trigger_temp_scan_async()
+
+    def get_idle_time(self):
+        """Retorna o tempo de inatividade (idle time) do usuário em segundos."""
+        try:
+            lii = LASTINPUTINFO()
+            lii.cbSize = ctypes.sizeof(LASTINPUTINFO)
+            if ctypes.windll.user32.GetLastInputInfo(ctypes.byref(lii)):
+                millis = ctypes.windll.kernel32.GetTickCount() - lii.dwTime
+                return millis / 1000.0
+            return 0.0
+        except Exception as e:
+            print(f"[Monitor] Erro ao obter tempo de ócio: {e}")
+            return 0.0
 
     def get_ram_info(self):
         """Retorna (porcentagem_ram, nome_processo_pesado, ram_processo_pesado_mb)"""

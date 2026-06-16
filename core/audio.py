@@ -43,7 +43,12 @@ class AudioSystem:
             pygame.mixer.init(frequency=44100, size=-16, channels=1, buffer=512)
             
         self.sounds = {}
+        self.muted = False
         self._generate_sounds()
+        
+    def toggle_mute(self):
+        self.muted = not self.muted
+        return self.muted
         
     def _generate_sounds(self):
         # 1. Quack (Frequência média que cai rapidamente)
@@ -102,5 +107,5 @@ class AudioSystem:
         self.sounds['beep'] = create_sound_from_buffer(punch_buf)
         
     def play(self, name):
-        if name in self.sounds:
+        if not self.muted and name in self.sounds:
             self.sounds[name].play()
