@@ -53,6 +53,7 @@ class Penguin:
         self.state = "ALERT"
         self.bubble.set_text(text)
         self.bubble.add_buttons(buttons)
+        self.substate_expire_time = pygame.time.get_ticks() + 15000 # 15s para interagir
         
     def set_state(self, new_state):
         self.state = new_state
@@ -73,7 +74,7 @@ class Penguin:
         self.bubble.set_text(random.choice(phrases))
         self.bubble.add_buttons([])
         self.last_action_time = time.time()
-        # Volta a passear depois de 3 segundos (gerenciado no update)
+        self.substate_expire_time = pygame.time.get_ticks() + 3000 # Volta a passear depois de 3 segundos
 
     def handle_event(self, event, mouse_pos):
         hitbox = self.drawer.get_hitbox(self.x, self.y)
@@ -244,11 +245,17 @@ class Penguin:
                     self.last_action_time = time.time()
                     self.substate_expire_time = now + 4000
                     
-        elif self.state == "IDLE" or self.state == "POKED":
+        elif self.state in ["IDLE", "POKED", "GRUMPY", "HAPPY", "CLEANING", "ALERT"]:
             if now > self.substate_expire_time:
-                self.state = "WANDERING"
-                self.bubble.set_text("")
-                self.last_action_time = time.time()
+                if self.state == "ALERT":
+                    self.state = "GRUMPY"
+                    self.bubble.set_text("Humph! Fui ignorado... Trabalhar sozinho é triste.")
+                    self.bubble.add_buttons([])
+                    self.substate_expire_time = now + 4000
+                else:
+                    self.state = "WANDERING"
+                    self.bubble.set_text("")
+                    self.last_action_time = time.time()
 
         # 3. Atualiza interface (Balão e Botões)
         # Posiciona balão dinamicamente

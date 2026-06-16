@@ -93,9 +93,13 @@ def main():
             penguin.set_state("HAPPY")
             penguin.bubble.set_text("Problema resolvido! Seu PC está respirando melhor agora.")
             penguin.bubble.add_buttons([
-                {'text': 'Ok', 'callback': lambda: handle_ignore()}
+                {'text': 'Ok', 'callback': lambda: handle_dismiss()}
             ])
+            penguin.substate_expire_time = pygame.time.get_ticks() + 5000
             cooldown_until = time.time() + 30 # 30s sem encher o saco
+            
+        def handle_dismiss():
+            penguin.set_state("WANDERING")
             
         def handle_ignore():
             nonlocal cooldown_until
@@ -104,6 +108,8 @@ def main():
             penguin.bubble.add_buttons([])
             penguin.substate_expire_time = pygame.time.get_ticks() + 3000 # 3s rabugento
             cooldown_until = time.time() + 60 # 60s sem incomodar
+            
+        penguin.on_alert_ignored = handle_ignore
 
         # 2. CAPTURA DE EVENTOS
         mouse_pos = get_mouse_pos()
@@ -117,20 +123,7 @@ def main():
         # 3. ATUALIZA ESTADOS (Pinguim, UI, Física)
         penguin.update(mouse_pos)
 
-        # 4. GESTÃO DE JANELA INTERATIVA vs CLICK-THROUGH
-        hitboxes = penguin.get_ui_hitboxes()
-        mouse_over_ui = any(r.collidepoint(mouse_pos) for r in hitboxes)
-        
-        if mouse_over_ui:
-            if not clickable_active:
-                set_window_interactivity(hwnd, True)
-                clickable_active = True
-        else:
-            if clickable_active:
-                set_window_interactivity(hwnd, False)
-                clickable_active = False
-
-        # 5. RENDERIZAÇÃO
+        # 4. RENDERIZAÇÃO
         screen.fill(INVISIBLE_COLOR)
         penguin.draw(screen, mouse_pos)
         

@@ -3,7 +3,7 @@ import os
 import win32api
 import win32con
 import win32gui
-from config import SCREEN_WIDTH, SCREEN_HEIGHT, INVISIBLE_COLOR
+from config import SCREEN_WIDTH, SCREEN_HEIGHT, INVISIBLE_COLOR, SCREEN_X, SCREEN_Y
 
 def setup_transparent_window(title="DoctorPenguin"):
     """
@@ -11,8 +11,8 @@ def setup_transparent_window(title="DoctorPenguin"):
     transparente e clicar através (exceto nos elementos desenhados).
     Retorna a surface (screen) e o HWND da janela.
     """
-    # Define a posição da janela na tela (canto superior esquerdo)
-    os.environ['SDL_VIDEO_WINDOW_POS'] = "0,0"
+    # Define a posição da janela na tela (canto superior esquerdo de todos os monitores virtuais)
+    os.environ['SDL_VIDEO_WINDOW_POS'] = f"{SCREEN_X},{SCREEN_Y}"
     
     pygame.init()
     
@@ -25,10 +25,13 @@ def setup_transparent_window(title="DoctorPenguin"):
     
     # Configura os estilos estendidos (Layered e Topmost)
     # WS_EX_LAYERED permite transparência por chroma key ou alpha
-    # WS_EX_TOPMOST mantém a janela sempre no topo
     ex_style = win32gui.GetWindowLong(hwnd, win32con.GWL_EXSTYLE)
     ex_style |= win32con.WS_EX_LAYERED | win32con.WS_EX_TOPMOST
     win32gui.SetWindowLong(hwnd, win32con.GWL_EXSTYLE, ex_style)
+    
+    # Força a janela a ser TOPMOST usando SetWindowPos (muito mais confiável que apenas a flag)
+    win32gui.SetWindowPos(hwnd, win32con.HWND_TOPMOST, 0, 0, 0, 0, 
+                          win32con.SWP_NOMOVE | win32con.SWP_NOSIZE | win32con.SWP_NOACTIVATE)
     
     # Configura a cor invisível (chroma key)
     # Todos os pixels desenhados com INVISIBLE_COLOR ficarão totalmente transparentes (buracos na janela)
@@ -58,10 +61,13 @@ def set_window_interactivity(hwnd, interactive):
         
     if new_style != current_ex_style:
         win32gui.SetWindowLong(hwnd, win32con.GWL_EXSTYLE, new_style)
+        # Re-aplica HWND_TOPMOST para impedir que ela caia para trás de outras abas
+        win32gui.SetWindowPos(hwnd, win32con.HWND_TOPMOST, 0, 0, 0, 0, 
+                              win32con.SWP_NOMOVE | win32con.SWP_NOSIZE | win32con.SWP_NOACTIVATE | win32con.SWP_FRAMECHANGED)
 
 def get_mouse_pos():
     """
-    Retorna a posição do mouse na tela. Como a janela está ancorada em 0,0,
-    a posição absoluta do mouse é equivalente à posição no Pygame.
+    Retorna a posição do mouse na tela ajustada para as coordenadas do Pygame.
     """
-    return win32api.GetCursorPos()
+    pos = win32api.GetCursorPos()
+    return (pos[0] - SCREEN_X, pos[1] - SCREEN_Y)
