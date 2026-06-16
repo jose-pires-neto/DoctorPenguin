@@ -26,11 +26,12 @@ BTN_TEXT_COLOR = (15, 15, 15)      # Texto de botão escuro
 SHADOW_COLOR = (150, 150, 150, 100)# Sombra leve translucida
 
 # --- LIMITES DE SISTEMA (THRESHOLDS) ---
-RAM_THRESHOLD = 75.0            # Alerta se uso de RAM > 75%
+RAM_THRESHOLD = 85.0            # Alerta se uso de RAM > 85%
 TEMP_THRESHOLD = 50 * 1024 * 1024 # Alerta se temporários > 50 MB
 RECYCLE_BIN_THRESHOLD = 1        # Alerta se houver 1 ou mais itens na lixeira
+BATTERY_THRESHOLD = 20           # Alerta se bateria estiver <= 20%
 MONITOR_CHECK_INTERVAL = 3000   # Checar sistema a cada 3 segundos (em ms)
-ALERT_COOLDOWN = 60000          # Tempo de silêncio após alerta ignorado (1 minuto)
+ALERT_COOLDOWN = 900000         # Tempo base de silêncio após alerta ignorado (15 minutos = 900000ms)
 
 # --- TEXTOS E FALAS DO PINGUIM ---
 DIALOGUES = {

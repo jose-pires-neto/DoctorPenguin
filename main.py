@@ -1,11 +1,12 @@
 import pygame
 import time
 import random
-from config import SCREEN_WIDTH, SCREEN_HEIGHT, INVISIBLE_COLOR, RAM_THRESHOLD, RECYCLE_BIN_THRESHOLD, TEMP_THRESHOLD
-from core.window import setup_transparent_window, set_window_interactivity, get_mouse_pos
+from config import SCREEN_WIDTH, SCREEN_HEIGHT, INVISIBLE_COLOR, RAM_THRESHOLD, RECYCLE_BIN_THRESHOLD, TEMP_THRESHOLD, BATTERY_THRESHOLD, ALERT_COOLDOWN
+from core.window import setup_transparent_window, get_mouse_pos
 from entities.penguin import Penguin
 from system.monitor import SystemMonitor
 from system.cleaner import Cleaner
+from system.whitelist import Whitelist
 
 def main():
     screen, hwnd = setup_transparent_window("DoctorPenguin")
@@ -14,13 +15,13 @@ def main():
     penguin = Penguin(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2)
     monitor = SystemMonitor()
     cleaner = Cleaner()
+    whitelist = Whitelist()
     
     clock = pygame.time.Clock()
     running = True
     
     last_monitor_time = 0
     cooldown_until = 0
-    clickable_active = False
     
     # Callback do pinguim
     def on_checkup():
@@ -31,8 +32,13 @@ def main():
         nonlocal running
         running = False
         
+    def on_snooze():
+        nonlocal cooldown_until
+        cooldown_until = time.time() + 3600 # 1 hora
+        
     penguin.on_checkup_request = on_checkup
     penguin.on_exit_request = on_exit
+    penguin.on_snooze_request = on_snooze
 
     print("Doctor Penguin iniciado com sucesso! Pinguim visível andando na tela e monitorando...")
 
@@ -44,33 +50,56 @@ def main():
             last_monitor_time = now
             alert_text = None
             alert_buttons = []
+            alert_type = None
+            alert_target = None
             
             # Checa RAM
             ram_percent, proc_name, proc_ram = monitor.get_ram_info()
-            if ram_percent > RAM_THRESHOLD:
-                alert_text = f"ALERTA CRÍTICO! Sua RAM está em {ram_percent:.1f}%!\nO processo '{proc_name}' está devorando {proc_ram:.1f} MB!\nQuer que eu encerre ele para você?"
+            if ram_percent > RAM_THRESHOLD and proc_name and not whitelist.is_ignored(proc_name):
+                alert_text = f"Sua RAM chegou a {ram_percent:.1f}%!\nO processo '{proc_name}' usa {proc_ram:.1f} MB!\nQuer que eu feche ele para aliviar o PC?"
                 alert_buttons = [
                     {'text': 'Encerrar', 'callback': lambda: handle_clean("RAM", proc_name)},
-                    {'text': 'Ignorar', 'callback': lambda: handle_ignore()}
+                    {'text': 'Ignorar', 'callback': lambda: handle_ignore("RAM", proc_name)}
                 ]
+                alert_type = "RAM"
+                alert_target = proc_name
             else:
-                # Checa Lixeira
-                items, size_mb = monitor.get_recycle_bin_info()
-                if items >= RECYCLE_BIN_THRESHOLD:
-                    alert_text = f"Sua Lixeira está acumulando lixo!\nTem {items} itens ocupando {size_mb:.1f} MB de espaço.\nPosso esvaziar a lixeira para você?"
+                # Checa Bateria
+                batt_percent, batt_plugged = monitor.check_battery()
+                if batt_percent is not None and batt_percent <= BATTERY_THRESHOLD and not batt_plugged:
+                    alert_text = f"Mestre, socorro! Bateria em {batt_percent}%!\nPor favor, conecte o carregador antes que eu apague!"
                     alert_buttons = [
-                        {'text': 'Esvaziar', 'callback': lambda: handle_clean("TRASH", None)},
-                        {'text': 'Ignorar', 'callback': lambda: handle_ignore()}
+                        {'text': 'Ok, já vou', 'callback': lambda: handle_dismiss()}
                     ]
+                    alert_type = "BATT"
                 else:
-                    # Checa Temporários
-                    temp_mb = monitor.get_temp_info() / (1024 * 1024)
-                    if temp_mb > (TEMP_THRESHOLD / (1024 * 1024)):
-                        alert_text = f"Seu PC tem muito lixo temporário!\nEstimo mais de {temp_mb:.1f} MB de arquivos que não servem para nada na pasta Temp.\nPosso limpar?"
+                    # Checa Internet
+                    if not monitor.check_internet():
+                        alert_text = "Ei! A internet caiu! Não consigo contatar minha família na Antártida!\nVerifique seu roteador!"
                         alert_buttons = [
-                            {'text': 'Limpar', 'callback': lambda: handle_clean("TEMP", None)},
-                            {'text': 'Ignorar', 'callback': lambda: handle_ignore()}
+                            {'text': 'Ok', 'callback': lambda: handle_dismiss()}
                         ]
+                        alert_type = "NET"
+                    else:
+                        # Checa Lixeira
+                        items, size_mb = monitor.get_recycle_bin_info()
+                        if items >= RECYCLE_BIN_THRESHOLD:
+                            alert_text = f"Sua Lixeira está fedendo!\nTem {items} itens ocupando {size_mb:.1f} MB de espaço.\nPosso esvaziar a lixeira para você?"
+                            alert_buttons = [
+                                {'text': 'Esvaziar', 'callback': lambda: handle_clean("TRASH", None)},
+                                {'text': 'Ignorar', 'callback': lambda: handle_ignore("TRASH", None)}
+                            ]
+                            alert_type = "TRASH"
+                        else:
+                            # Checa Temporários
+                            temp_mb = monitor.get_temp_info() / (1024 * 1024)
+                            if temp_mb > (TEMP_THRESHOLD / (1024 * 1024)):
+                                alert_text = f"Estimo mais de {temp_mb:.1f} MB de arquivos inúteis na pasta Temp.\nPosso fazer a faxina?"
+                                alert_buttons = [
+                                    {'text': 'Limpar', 'callback': lambda: handle_clean("TEMP", None)},
+                                    {'text': 'Ignorar', 'callback': lambda: handle_ignore("TEMP", None)}
+                                ]
+                                alert_type = "TEMP"
                         
             if alert_text:
                 penguin.set_alert(alert_text, alert_buttons)
@@ -101,15 +130,20 @@ def main():
         def handle_dismiss():
             penguin.set_state("WANDERING")
             
-        def handle_ignore():
+        def handle_ignore(type="UNKNOWN", target=None):
             nonlocal cooldown_until
+            if type == "RAM" and target:
+                whitelist.ignore_process(target, hours=2)
+                penguin.bubble.set_text(f"Ok, vou ignorar o '{target}' por um tempo. Mas fique de olho!")
+            else:
+                penguin.bubble.set_text("Humph! Você ignorou meu conselho. Depois não reclame!")
+            
             penguin.set_state("GRUMPY")
-            penguin.bubble.set_text("Humph! Você ignorou meu conselho. Não reclame depois se o PC travar...")
             penguin.bubble.add_buttons([])
             penguin.substate_expire_time = pygame.time.get_ticks() + 3000 # 3s rabugento
-            cooldown_until = time.time() + 60 # 60s sem incomodar
+            cooldown_until = time.time() + (ALERT_COOLDOWN / 1000.0) # 15 minutos sem incomodar por outras coisas
             
-        penguin.on_alert_ignored = handle_ignore
+        penguin.on_alert_ignored = lambda: handle_ignore("TIMEOUT", None)
 
         # 2. CAPTURA DE EVENTOS
         mouse_pos = get_mouse_pos()

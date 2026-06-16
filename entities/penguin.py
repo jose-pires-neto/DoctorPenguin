@@ -6,6 +6,7 @@ from config import SCREEN_WIDTH, SCREEN_HEIGHT
 from entities.drawer import PenguinDrawer
 from ui.components import DialogueBubble
 from ui.menu import ContextMenu
+from core.audio import AudioSystem
 
 # Constantes de Movimentação e Física
 WANDER_MIN_TIME = 2000
@@ -25,6 +26,10 @@ class Penguin:
         self.drawer = PenguinDrawer()
         self.bubble = DialogueBubble("", x, y, 280, 100)
         self.menu = ContextMenu()
+        self.audio = AudioSystem()
+        
+        # Atributos de Tamagotchi
+        self.happiness = 100
         
         # Estados: WANDERING, HELD, THROWN, ALERT, POKED, IDLE, GRUMPY, HAPPY, CLEANING
         self.state = "WANDERING"
@@ -64,6 +69,8 @@ class Penguin:
     def poke(self):
         """Reação ao clique rápido"""
         self.state = "POKED"
+        self.happiness = max(0, self.happiness - 5)
+        self.audio.play('quack')
         phrases = [
             "Pare com isso!",
             "Isso dói, sabia?",
@@ -107,6 +114,9 @@ class Penguin:
                 if mouse_over:
                     self.menu.show(mouse_pos[0], mouse_pos[1], [
                         {'text': 'Fazer Checkup', 'callback': self._trigger_checkup},
+                        {'text': 'Silenciar (1 hora)', 'callback': self._snooze},
+                        {'text': 'Dar um peixe 🐟', 'callback': self._feed},
+                        {'text': 'Fazer carinho', 'callback': self._pet},
                         {'text': 'Dormir (Sair)', 'callback': self._trigger_exit}
                     ])
                     return True
@@ -128,8 +138,42 @@ class Penguin:
 
     def _trigger_checkup(self):
         self.menu.hide()
+        if self.happiness < 20:
+            self.set_state("GRUMPY")
+            self.bubble.set_text("Estou com fome e triste! Me dê um peixe antes de pedir favores!")
+            self.bubble.add_buttons([])
+            self.substate_expire_time = pygame.time.get_ticks() + 4000
+            return
+            
         if self.on_checkup_request:
             self.on_checkup_request()
+            
+    def _snooze(self):
+        self.menu.hide()
+        self.set_state("HAPPY")
+        self.bubble.set_text("Modo silencioso ativado! Vou só brincar por aqui pelas próximas horas.")
+        self.bubble.add_buttons([])
+        self.substate_expire_time = pygame.time.get_ticks() + 4000
+        # O main cuidará do Snooze global
+        if hasattr(self, 'on_snooze_request') and self.on_snooze_request:
+            self.on_snooze_request()
+            
+    def _feed(self):
+        self.menu.hide()
+        self.happiness = min(100, self.happiness + 30)
+        self.set_state("HAPPY")
+        self.audio.play('quack')
+        self.bubble.set_text("Nham nham! Delícia! Obrigado, mestre!")
+        self.bubble.add_buttons([])
+        self.substate_expire_time = pygame.time.get_ticks() + 4000
+        
+    def _pet(self):
+        self.menu.hide()
+        self.happiness = min(100, self.happiness + 15)
+        self.set_state("HAPPY")
+        self.bubble.set_text("hehe... isso faz cosquinha!")
+        self.bubble.add_buttons([])
+        self.substate_expire_time = pygame.time.get_ticks() + 4000
             
     def _trigger_exit(self):
         self.menu.hide()
@@ -168,15 +212,21 @@ class Penguin:
             
             # Quica nas bordas
             if self.y >= SCREEN_HEIGHT - 40:
+                if self.vy > 2: self.audio.play('boing')
                 self.y = SCREEN_HEIGHT - 40
                 self.vy = -self.vy * BOUNCE_DAMPING
                 self.vx *= FRICTION # Atrito no chão
+                self.happiness = max(0, self.happiness - 1)
             if self.x <= 40:
+                if abs(self.vx) > 2: self.audio.play('boing')
                 self.x = 40
                 self.vx = -self.vx * BOUNCE_DAMPING
+                self.happiness = max(0, self.happiness - 1)
             elif self.x >= SCREEN_WIDTH - 40:
+                if abs(self.vx) > 2: self.audio.play('boing')
                 self.x = SCREEN_WIDTH - 40
                 self.vx = -self.vx * BOUNCE_DAMPING
+                self.happiness = max(0, self.happiness - 1)
                 
             # Gira loucamente enquanto cai rápido
             if abs(self.vx) > 3 or abs(self.vy) > 3:

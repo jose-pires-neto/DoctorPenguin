@@ -3,6 +3,7 @@ import ctypes
 import threading
 import time
 import psutil
+import urllib.request
 from ctypes import wintypes
 
 class SHQUERYRBINFO(ctypes.Structure):
@@ -97,3 +98,21 @@ class SystemMonitor:
 
         thread = threading.Thread(target=scan_job, daemon=True)
         thread.start()
+
+    def check_battery(self):
+        """Retorna (porcentagem, carregando) ou (None, None) se for desktop"""
+        if not hasattr(psutil, "sensors_battery"):
+            return None, None
+        battery = psutil.sensors_battery()
+        if battery:
+            return battery.percent, battery.power_plugged
+        return None, None
+        
+    def check_internet(self):
+        """Retorna True se estiver conectado à internet"""
+        try:
+            # Tenta conectar ao DNS do Google via urllib
+            urllib.request.urlopen('http://8.8.8.8', timeout=1)
+            return True
+        except:
+            return False
