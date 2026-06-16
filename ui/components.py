@@ -114,40 +114,61 @@ class DialogueBubble:
                 if self.char_index <= len(self.full_text):
                     self.current_text = self.full_text[:self.char_index]
                     self.last_char_time = now
-                    # Bip de digitação discreto a cada 3 caracteres para dar o clima retro/vírus
+                    # Bip de digitação
                     if self.char_index % 3 == 0:
                         try:
-                            # 900Hz por 10ms, assíncrono para não travar o jogo
-                            # winsound.Beep é síncrono no python clássico, mas podemos tocar de forma muito rápida
-                            # ou ignorar som de digitação se travar. Para não travar, fazemos bips muito curtos
                             winsound.Beep(1200, 15)
                         except:
                             pass
                 else:
                     self.is_typing = False
                     
-        # Converte o texto atual em linhas com quebra de palavra
-        self.lines = self._wrap_text(self.current_text, self.width - 24)
+        # Converte o texto atual em linhas limitando à largura máxima permitida
+        max_allowed_width = 280
+        self.lines = self._wrap_text(self.current_text, max_allowed_width - 24)
         
-        # Atualiza os botões apenas se tiver terminado de digitar
-        if not self.is_typing:
-            has_buttons = len(self.buttons) > 0
-            
-            # Altura dinâmica baseada na quantidade de texto e botões
-            text_height = len(self.lines) * 20
-            self.max_height = text_height + (50 if has_buttons else 25)
-            
-            # Posiciona e atualiza os botões dinamicamente
-            if has_buttons:
-                btn_padding = 10
-                btn_width = (self.width - (btn_padding * (len(self.buttons) + 1))) // len(self.buttons)
-                btn_y = self.y + self.max_height - 35
+        # Calcula a largura dinâmica com base no que está visível agora
+        max_line_width = 0
+        for line in self.lines:
+            w, _ = self.font.size(line)
+            if w > max_line_width:
+                max_line_width = w
                 
-                for idx, btn in enumerate(self.buttons):
-                    btn.rect.x = self.x + btn_padding + idx * (btn_width + btn_padding)
-                    btn.rect.y = btn_y
-                    btn.rect.width = btn_width
-                    btn.update(mouse_pos)
+        # Adiciona padding
+        new_width = max_line_width + 24
+        
+        # Garante que tenha largura suficiente para os botões se eles estiverem visíveis
+        has_buttons = len(self.buttons) > 0 and not self.is_typing
+        if has_buttons:
+            min_btn_width = len(self.buttons) * 70 + (len(self.buttons) + 1) * 10
+            if new_width < min_btn_width:
+                new_width = min_btn_width
+                
+        # Define largura mínima para não ficar estranho
+        if new_width < 60:
+            new_width = 60
+            
+        self.width = new_width
+        
+        # Altura dinâmica baseada na quantidade de linhas AGORA
+        text_height = max(1, len(self.lines)) * 20
+        self.max_height = text_height + (45 if has_buttons else 20)
+        
+        self.update_buttons(mouse_pos)
+        
+    def update_buttons(self, mouse_pos):
+        # Atualiza a posição dos botões caso a largura ou x/y do balão tenha mudado
+        has_buttons = len(self.buttons) > 0 and not self.is_typing
+        if has_buttons:
+            btn_padding = 10
+            btn_width = (self.width - (btn_padding * (len(self.buttons) + 1))) // len(self.buttons)
+            btn_y = self.y + self.max_height - 35
+            
+            for idx, btn in enumerate(self.buttons):
+                btn.rect.x = self.x + btn_padding + idx * (btn_width + btn_padding)
+                btn.rect.y = btn_y
+                btn.rect.width = btn_width
+                btn.update(mouse_pos)
                 
     def _wrap_text(self, text, max_w):
         """Algoritmo de Word Wrap clássico para Pygame."""

@@ -4,16 +4,20 @@ import time
 
 SAVE_FILE = "save_data.json"
 
-class Whitelist:
+class SaveManager:
     def __init__(self):
-        self.data = {"ignored_processes": {}}
+        self.data = {
+            "ignored_processes": {},
+            "fishes": 3 # Começa com 3 peixinhos de brinde
+        }
         self.load()
 
     def load(self):
         if os.path.exists(SAVE_FILE):
             try:
                 with open(SAVE_FILE, "r") as f:
-                    self.data = json.load(f)
+                    loaded_data = json.load(f)
+                    self.data.update(loaded_data)
             except:
                 pass
 
@@ -47,4 +51,19 @@ class Whitelist:
             del self.data["ignored_processes"][process_name]
             self.save()
             
+        return False
+        
+    # --- Fish Inventory ---
+    def get_fishes(self):
+        return self.data.get("fishes", 0)
+        
+    def add_fish(self, amount=1):
+        self.data["fishes"] = self.get_fishes() + amount
+        self.save()
+        
+    def consume_fish(self):
+        if self.get_fishes() > 0:
+            self.data["fishes"] -= 1
+            self.save()
+            return True
         return False

@@ -32,23 +32,26 @@ class SystemMonitor:
             top_process = None
             max_rss = 0
             
-            for proc in psutil.process_iter(['name', 'memory_info']):
+            for proc in psutil.process_iter():
                 try:
-                    info = proc.info
-                    if info['memory_info']:
-                        rss = info['memory_info'].rss
-                        if rss > max_rss:
-                            # Ignora processos do sistema que não podemos/devemos fechar
-                            if info['name'].lower() not in ['system', 'registry', 'idle', 'lsass.exe', 'csrss.exe', 'explorer.exe']:
-                                max_rss = rss
-                                top_process = proc
-                except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
+                    name = proc.name()
+                    mem = proc.memory_info()
+                    rss = mem.rss
+                    if rss > max_rss:
+                        # Ignora processos do sistema que não podemos/devemos fechar
+                        if name.lower() not in ['system', 'registry', 'idle', 'lsass.exe', 'csrss.exe', 'explorer.exe']:
+                            max_rss = rss
+                            top_process = proc
+                except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess, PermissionError, OSError):
                     continue
                     
             if top_process and max_rss > 0:
-                top_process_name = top_process.info['name']
-                top_process_ram_mb = max_rss / (1024 * 1024)
-                return ram_percent, top_process_name, top_process_ram_mb
+                try:
+                    top_process_name = top_process.name()
+                    top_process_ram_mb = max_rss / (1024 * 1024)
+                    return ram_percent, top_process_name, top_process_ram_mb
+                except:
+                    pass
                 
             return ram_percent, "Nenhum", 0.0
         except Exception as e:
@@ -111,8 +114,8 @@ class SystemMonitor:
     def check_internet(self):
         """Retorna True se estiver conectado à internet"""
         try:
-            # Tenta conectar ao DNS do Google via urllib
-            urllib.request.urlopen('http://8.8.8.8', timeout=1)
+            # Conecta a um site real que responda a requisições HTTP rápidas
+            urllib.request.urlopen('http://www.google.com', timeout=2)
             return True
         except:
             return False

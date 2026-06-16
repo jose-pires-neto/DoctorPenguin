@@ -6,6 +6,7 @@ from config import SCREEN_WIDTH, SCREEN_HEIGHT
 from entities.drawer import PenguinDrawer
 from ui.components import DialogueBubble
 from ui.menu import ContextMenu
+from ui.props import draw_broom, draw_zzz, draw_stethoscope
 from core.audio import AudioSystem
 
 # Constantes de Movimentação e Física
@@ -17,11 +18,12 @@ BOUNCE_DAMPING = 0.6
 FRICTION = 0.95
 
 class Penguin:
-    def __init__(self, x, y):
+    def __init__(self, x, y, save_manager):
         self.x = x
         self.y = y
         self.vx = 0
         self.vy = 0
+        self.save_manager = save_manager
         
         self.drawer = PenguinDrawer()
         self.bubble = DialogueBubble("", x, y, 280, 100)
@@ -30,6 +32,7 @@ class Penguin:
         
         # Atributos de Tamagotchi
         self.happiness = 100
+        self.prop = None # "BROOM", "STETHOSCOPE", "ZZZ", None
         
         # Estados: WANDERING, HELD, THROWN, ALERT, POKED, IDLE, GRUMPY, HAPPY, CLEANING
         self.state = "WANDERING"
@@ -112,10 +115,11 @@ class Penguin:
                     return True
             elif event.button == 3: # Clique Direito
                 if mouse_over:
+                    fishes = self.save_manager.get_fishes()
                     self.menu.show(mouse_pos[0], mouse_pos[1], [
                         {'text': 'Fazer Checkup', 'callback': self._trigger_checkup},
                         {'text': 'Silenciar (1 hora)', 'callback': self._snooze},
-                        {'text': 'Dar um peixe 🐟', 'callback': self._feed},
+                        {'text': f'Dar um peixe 🐟 ({fishes}x)', 'callback': self._feed},
                         {'text': 'Fazer carinho', 'callback': self._pet},
                         {'text': 'Dormir (Sair)', 'callback': self._trigger_exit}
                     ])
@@ -151,6 +155,7 @@ class Penguin:
     def _snooze(self):
         self.menu.hide()
         self.set_state("HAPPY")
+        self.prop = "ZZZ"
         self.bubble.set_text("Modo silencioso ativado! Vou só brincar por aqui pelas próximas horas.")
         self.bubble.add_buttons([])
         self.substate_expire_time = pygame.time.get_ticks() + 4000
@@ -160,10 +165,16 @@ class Penguin:
             
     def _feed(self):
         self.menu.hide()
-        self.happiness = min(100, self.happiness + 30)
-        self.set_state("HAPPY")
-        self.audio.play('quack')
-        self.bubble.set_text("Nham nham! Delícia! Obrigado, mestre!")
+        if self.save_manager.consume_fish():
+            self.happiness = min(100, self.happiness + 30)
+            self.set_state("HAPPY")
+            self.audio.play('quack')
+            self.bubble.set_text("Nham nham! Delícia! Obrigado, mestre!")
+        else:
+            self.set_state("GRUMPY")
+            self.audio.play('quack')
+            self.bubble.set_text("Você não tem peixes! Espere eu pescar algum ou procure na tela.")
+            
         self.bubble.add_buttons([])
         self.substate_expire_time = pygame.time.get_ticks() + 4000
         
@@ -298,12 +309,11 @@ class Penguin:
         elif self.state in ["IDLE", "POKED", "GRUMPY", "HAPPY", "CLEANING", "ALERT"]:
             if now > self.substate_expire_time:
                 if self.state == "ALERT":
-                    self.state = "GRUMPY"
-                    self.bubble.set_text("Humph! Fui ignorado... Trabalhar sozinho é triste.")
-                    self.bubble.add_buttons([])
-                    self.substate_expire_time = now + 4000
+                    if hasattr(self, 'on_alert_ignored') and self.on_alert_ignored:
+                        self.on_alert_ignored()
                 else:
                     self.state = "WANDERING"
+                    self.prop = None
                     self.bubble.set_text("")
                     self.last_action_time = time.time()
 
@@ -337,6 +347,8 @@ class Penguin:
         return hitboxes
 
     def draw(self, screen, mouse_pos):
+        now_ms = pygame.time.get_ticks()
+        
         # Transforma o estado do Penguin no estado visual do Drawer
         visual_state = self.state
         if self.state == "WANDERING":
@@ -346,6 +358,14 @@ class Penguin:
             
         self.drawer.draw(screen, self.x, self.y, visual_state, mouse_pos, self.direction_idx)
         
+        # Desenhar Props por cima do pinguim dependendo do estado/prop
+        if self.state == "CLEANING" or self.prop == "BROOM":
+            draw_broom(screen, self.x, self.y, now_ms)
+        elif self.prop == "STETHOSCOPE":
+            draw_stethoscope(screen, self.x, self.y)
+        elif self.prop == "ZZZ":
+            draw_zzz(screen, self.x, self.y, now_ms)
+            
         if self.bubble.current_text != "":
             self.bubble.draw(screen)
             
