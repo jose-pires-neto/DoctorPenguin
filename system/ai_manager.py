@@ -1,12 +1,20 @@
 import threading
 import urllib.request
 import json
+import queue
 
 class AIManager:
     def __init__(self):
         self._is_enabled = False
         self.model = "llama3.2:1b"
         self.api_url = "http://localhost:11434/api/generate"
+        
+        # Sistema de Fila de Falas
+        self.request_queue = queue.Queue()
+        self.current_task_id = 0
+        self.worker_thread = threading.Thread(target=self._worker_loop, daemon=True)
+        self.worker_thread.start()
+        
         self.system_prompt = (
             "Você é o Doctor Penguin, um pinguim mascote virtual de computador. "
             "Você mora no PC do usuário e ajuda a cuidar do sistema. "
@@ -28,9 +36,25 @@ class AIManager:
             callback(fallback)
             return
 
-        def task():
+        self.current_task_id += 1
+        
+        self.request_queue.put({
+            'task_id': self.current_task_id,
+            'event_context': event_context,
+            'callback': callback,
+            'fallback': fallback
+        })
+
+    def _worker_loop(self):
+        while True:
+            req = self.request_queue.get()
+            
+            # Se já tem outra requisição mais nova na fila, descarta esta (evita acúmulo)
+            if req['task_id'] != self.current_task_id:
+                continue
+                
             try:
-                prompt = f"Contexto atual do PC ou da interação: {event_context}\nO que você diria para o usuário agora?"
+                prompt = f"Contexto atual do PC ou da interação: {req['event_context']}\nO que você diria para o usuário agora?"
                 
                 payload = {
                     "model": self.model,
@@ -40,27 +64,29 @@ class AIManager:
                 }
                 
                 data = json.dumps(payload).encode("utf-8")
-                req = urllib.request.Request(self.api_url, data=data, headers={"Content-Type": "application/json"})
+                http_req = urllib.request.Request(self.api_url, data=data, headers={"Content-Type": "application/json"})
                 
-                with urllib.request.urlopen(req, timeout=30) as response:
+                with urllib.request.urlopen(http_req, timeout=30) as response:
+                    # Verifica se o usuário engatilhou outra fala enquanto esperávamos a IA pensar
+                    if req['task_id'] != self.current_task_id:
+                        continue
+                        
                     if response.status == 200:
                         resp_data = json.loads(response.read().decode("utf-8"))
                         ai_text = resp_data.get("response", "").strip()
-                        # Remove aspas se a IA por algum motivo as incluir no começo e fim
+                        # Remove aspas extras que a IA as vezes coloca
                         if ai_text.startswith('"') and ai_text.endswith('"'):
                             ai_text = ai_text[1:-1]
                             
                         if ai_text:
-                            callback(ai_text)
+                            req['callback'](ai_text)
                         else:
-                            callback(fallback)
+                            req['callback'](req['fallback'])
                     else:
                         print(f"[AIManager] Erro na API do Ollama (Status {response.status})")
-                        callback(fallback)
+                        req['callback'](req['fallback'])
             except Exception as e:
-                print(f"[AIManager] Erro ao contatar Ollama. Certifique-se de que ele está rodando. Erro: {e}")
-                callback(fallback)
-
-        thread = threading.Thread(target=task)
-        thread.daemon = True
-        thread.start()
+                # Só executa o fallback de erro se ainda for a task atual
+                if req['task_id'] == self.current_task_id:
+                    print(f"[AIManager] Erro ao contatar Ollama: {e}")
+                    req['callback'](req['fallback'])

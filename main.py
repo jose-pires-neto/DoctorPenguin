@@ -136,13 +136,13 @@ def main():
             penguin.bubble.add_buttons([])
             
             if type == "RAM":
-                cleaner.kill_process(target)
+                cleaner.terminate_process_by_name(target)
                 context = f"Eu acabei de fechar o processo pesadão '{target}' e liberei memória RAM."
             elif type == "TRASH":
                 cleaner.empty_recycle_bin()
                 context = "Eu acabei de esvaziar a lixeira fedorenta e o PC está mais limpo."
             elif type == "TEMP":
-                cleaner.clean_temp_files()
+                cleaner.clean_temp_files_async()
                 context = "Eu acabei de apagar os arquivos temporários e liberei espaço no disco."
                 
             # Mostra mensagem de sucesso
