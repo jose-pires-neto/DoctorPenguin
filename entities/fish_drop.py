@@ -1,6 +1,7 @@
 import pygame
 import math
 import random
+from core.window import get_floor_y
 
 def draw_fish(surface, x, y, scale=1.0):
     """Desenha um peixe simples usando primitivas do pygame"""
@@ -20,12 +21,18 @@ def draw_fish(surface, x, y, scale=1.0):
 
 class FishDrop:
     def __init__(self, screen_width):
-        self.x = random.randint(100, screen_width - 100)
+        # Nasce sempre em um dos cantos da tela (ex: direita ou esquerda)
+        side = random.choice(["LEFT", "RIGHT"])
+        if side == "LEFT":
+            self.x = random.randint(50, 150)
+        else:
+            self.x = random.randint(screen_width - 150, screen_width - 50)
+            
         self.y = -50
-        self.vx = random.uniform(-2, 2)
-        self.vy = 0
+        self.vx = 0
+        self.vy = 2.0
         self.active = True
-        self.gravity = 0.2
+        self.gravity = 0.05 # Cai mais devagar
         
         self.width = 40
         self.height = 20
@@ -38,16 +45,16 @@ class FishDrop:
         
         if not self.landed:
             self.vy += self.gravity
-            self.x += self.vx
             self.y += self.vy
             
-            if self.y >= screen_height - 30:
-                self.y = screen_height - 30
-                self.vy = -self.vy * 0.4
-                self.vx *= 0.8
-                if abs(self.vy) < 1.0:
-                    self.landed = True
-                    self.expire_time = pygame.time.get_ticks() + 5000 # 5 segundos pra pegar
+            # Balança de um lado pro outro como uma folha caindo
+            self.x += math.sin(self.y / 20.0) * 2.0
+            
+            floor_y = get_floor_y(self.x, self.y) - 10
+            if self.y >= floor_y:
+                self.y = floor_y
+                self.landed = True
+                self.expire_time = pygame.time.get_ticks() + 15000 # 15 segundos para pegar
         else:
             if pygame.time.get_ticks() > self.expire_time:
                 self.active = False

@@ -2,12 +2,14 @@ import pygame
 import random
 import time
 import math
+from core.window import get_mouse_pos, get_floor_y
 from config import SCREEN_WIDTH, SCREEN_HEIGHT
 from entities.drawer import PenguinDrawer
 from ui.components import DialogueBubble
 from ui.menu import ContextMenu
-from ui.props import draw_broom, draw_zzz, draw_stethoscope
+from ui.props import draw_broom, draw_zzz, draw_stethoscope, draw_glasses
 from core.audio import AudioSystem
+import win32api
 
 # Constantes de Movimentação e Física
 WANDER_MIN_TIME = 2000
@@ -32,12 +34,14 @@ class Penguin:
         
         # Atributos de Tamagotchi
         self.happiness = 100
-        self.prop = None # "BROOM", "STETHOSCOPE", "ZZZ", None
+        self.prop = None # "BROOM", "STETHOSCOPE", "ZZZ", "GLASSES", None
         
-        # Estados: WANDERING, HELD, THROWN, ALERT, POKED, IDLE, GRUMPY, HAPPY, CLEANING
+        # Estados: WANDERING, HELD, THROWN, ALERT, POKED, IDLE, GRUMPY, HAPPY, CLEANING, POMODORO, REVOLTED
         self.state = "WANDERING"
         self.wander_substate = "WANDERING" # WANDERING, IDLE_STANDING, SITTING
         self.substate_expire_time = pygame.time.get_ticks() + random.randint(WANDER_MIN_TIME, WANDER_MAX_TIME)
+        
+        self.pomodoro_end = 0
         
         self.direction_idx = 0
         self.dest_x = x
@@ -103,6 +107,12 @@ class Penguin:
         if event.type == pygame.MOUSEBUTTONDOWN:
             if event.button == 1: # Clique Esquerdo
                 if mouse_over:
+                    if self.state == "POMODORO":
+                        self.bubble.set_text("Shhh! Estou focado trabalhando! Não me distraia!")
+                        self.bubble.add_buttons([])
+                        self.substate_expire_time = pygame.time.get_ticks() + 3000
+                        return True
+                        
                     self.is_held = True
                     self.state = "HELD"
                     self.hold_offset_x = self.x - mouse_pos[0]
@@ -116,13 +126,19 @@ class Penguin:
             elif event.button == 3: # Clique Direito
                 if mouse_over:
                     fishes = self.save_manager.get_fishes()
-                    self.menu.show(mouse_pos[0], mouse_pos[1], [
-                        {'text': 'Fazer Checkup', 'callback': self._trigger_checkup},
-                        {'text': 'Silenciar (1 hora)', 'callback': self._snooze},
-                        {'text': f'Dar um peixe 🐟 ({fishes}x)', 'callback': self._feed},
-                        {'text': 'Fazer carinho', 'callback': self._pet},
-                        {'text': 'Dormir (Sair)', 'callback': self._trigger_exit}
-                    ])
+                    if self.state == "POMODORO":
+                        self.menu.show(mouse_pos[0], mouse_pos[1], [
+                            {'text': 'Cancelar Foco', 'callback': self._cancel_pomodoro}
+                        ])
+                    else:
+                        self.menu.show(mouse_pos[0], mouse_pos[1], [
+                            {'text': 'Focar (25 min)', 'callback': self._start_pomodoro},
+                            {'text': 'Fazer Checkup', 'callback': self._trigger_checkup},
+                            {'text': 'Silenciar (1 hora)', 'callback': self._snooze},
+                            {'text': f'Dar um peixe 🐟 ({fishes}x)', 'callback': self._feed},
+                            {'text': 'Fazer carinho', 'callback': self._pet},
+                            {'text': 'Dormir (Sair)', 'callback': self._trigger_exit}
+                        ])
                     return True
                     
         elif event.type == pygame.MOUSEBUTTONUP:
@@ -151,6 +167,23 @@ class Penguin:
             
         if self.on_checkup_request:
             self.on_checkup_request()
+            
+    def _start_pomodoro(self):
+        self.menu.hide()
+        self.set_state("POMODORO")
+        self.prop = "GLASSES"
+        self.pomodoro_end = pygame.time.get_ticks() + 25 * 60 * 1000 # 25 minutes
+        self.bubble.set_text("Modo Foco ativado! Bora trabalhar!")
+        self.bubble.add_buttons([])
+        self.substate_expire_time = pygame.time.get_ticks() + 3000
+        
+    def _cancel_pomodoro(self):
+        self.menu.hide()
+        self.set_state("WANDERING")
+        self.prop = None
+        self.bubble.set_text("Foco cancelado... Que pena!")
+        self.bubble.add_buttons([])
+        self.substate_expire_time = pygame.time.get_ticks() + 3000
             
     def _snooze(self):
         self.menu.hide()
@@ -222,9 +255,10 @@ class Penguin:
             self.vx *= 0.99
             
             # Quica nas bordas
-            if self.y >= SCREEN_HEIGHT - 40:
+            floor_y = get_floor_y(self.x, self.y) - 40
+            if self.y >= floor_y:
                 if self.vy > 2: self.audio.play('boing')
-                self.y = SCREEN_HEIGHT - 40
+                self.y = floor_y
                 self.vy = -self.vy * BOUNCE_DAMPING
                 self.vx *= FRICTION # Atrito no chão
                 self.happiness = max(0, self.happiness - 1)
@@ -246,12 +280,74 @@ class Penguin:
                 self.direction_idx = 0 # Olha pra frente
                 
             # Se parar quase totalmente, volta a passear
-            if abs(self.vx) < 0.5 and abs(self.vy) < 0.5 and self.y >= SCREEN_HEIGHT - 45:
-                self.state = "WANDERING"
+            floor_y = get_floor_y(self.x, self.y) - 45
+            if abs(self.vx) < 0.5 and abs(self.vy) < 0.5 and self.y >= floor_y:
+                if self.happiness == 0 and time.time() - getattr(self, 'last_revolt_time', 0) > 120:
+                    self.state = "REVOLTED"
+                    self.bubble.set_text("ESTOU REVOLTADO!!")
+                else:
+                    self.state = "WANDERING"
+                    self.bubble.set_text("")
                 self.vx = 0
                 self.vy = 0
-                self.bubble.set_text("")
                 self.last_action_time = time.time()
+                
+        # 1.5. Lógica Pomodoro
+        elif self.state == "POMODORO":
+            # Pinguim fica sentado lendo exatamente onde está
+            self.wander_substate = "SITTING"
+            
+            time_left = max(0, (self.pomodoro_end - now) // 1000)
+            mins = time_left // 60
+            secs = time_left % 60
+            
+            if not self.bubble.is_typing:
+                self.bubble.set_text_instant(f"Modo Foco ativado! Bora trabalhar!\nTempo Restante: {mins:02d}:{secs:02d}")
+            
+            if now > self.pomodoro_end:
+                self.state = "HAPPY"
+                self.prop = None
+                self.audio.play('beep')
+                self.bubble.set_text("Pomodoro finalizado! Bom trabalho, mestre! Ganhou um peixe!")
+                self.save_manager.add_fish()
+                self.bubble.add_buttons([])
+                self.substate_expire_time = now + 5000
+                
+        # 1.6. Lógica REVOLTED (Física do Mouse)
+        elif self.state == "REVOLTED":
+            # Persegue o mouse agressivamente
+            dx = mouse_pos[0] - self.x
+            dy = mouse_pos[1] - self.y
+            dist = math.hypot(dx, dy)
+            
+            # Movimentação super rápida
+            if dist > 30:
+                self.x += (dx / dist) * 4.0
+                self.y += (dy / dist) * 4.0
+                
+                # Face direction towards mouse
+                angle = math.degrees(math.atan2(-dy, dx))
+                if angle < 0: angle += 360
+                sector = int(((angle + 22.5) % 360) / 45)
+                sector_to_idx = {0: 6, 1: 5, 2: 4, 3: 3, 4: 2, 5: 1, 6: 0, 7: 7}
+                self.direction_idx = sector_to_idx.get(sector, 0)
+            else:
+                # Encostou no mouse! Joga o mouse pro lado
+                try:
+                    current_mouse_x, current_mouse_y = win32api.GetCursorPos()
+                    # Empurra o mouse pra longe do pinguim
+                    push_x = 50 if dx < 0 else -50
+                    push_y = 50 if dy < 0 else -50
+                    win32api.SetCursorPos((current_mouse_x + push_x, current_mouse_y + push_y))
+                    self.audio.play('boing')
+                except:
+                    pass
+                    
+                # Dá o golpe e foge (Cooldown de 2 minutos antes do próximo ataque)
+                self.state = "WANDERING"
+                self.last_revolt_time = time.time()
+                self.bubble.set_text("Me dê atenção ou eu ataco de novo daqui a pouco!!")
+                self.substate_expire_time = now + 4000
                 
         # 2. Atualiza Lógica de Passeio (Wandering)
         elif self.state == "WANDERING":
@@ -261,7 +357,8 @@ class Penguin:
                 if r < 0.5:
                     self.wander_substate = "WANDERING"
                     self.dest_x = random.randint(100, SCREEN_WIDTH - 100)
-                    self.dest_y = random.randint(100, SCREEN_HEIGHT - 100)
+                    floor_y = get_floor_y(self.dest_x, self.y) - 40
+                    self.dest_y = random.randint(100, int(floor_y))
                 elif r < 0.8:
                     self.wander_substate = "IDLE_STANDING"
                 else:
@@ -312,7 +409,10 @@ class Penguin:
                     if hasattr(self, 'on_alert_ignored') and self.on_alert_ignored:
                         self.on_alert_ignored()
                 else:
-                    self.state = "WANDERING"
+                    if self.happiness == 0:
+                        self.state = "REVOLTED"
+                    else:
+                        self.state = "WANDERING"
                     self.prop = None
                     self.bubble.set_text("")
                     self.last_action_time = time.time()
@@ -365,6 +465,8 @@ class Penguin:
             draw_stethoscope(screen, self.x, self.y)
         elif self.prop == "ZZZ":
             draw_zzz(screen, self.x, self.y, now_ms)
+        elif self.prop == "GLASSES":
+            draw_glasses(screen, self.x, self.y)
             
         if self.bubble.current_text != "":
             self.bubble.draw(screen)

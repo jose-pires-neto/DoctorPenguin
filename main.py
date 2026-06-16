@@ -5,6 +5,7 @@ from config import SCREEN_WIDTH, SCREEN_HEIGHT, INVISIBLE_COLOR, RAM_THRESHOLD, 
 from core.window import setup_transparent_window, get_mouse_pos
 from entities.penguin import Penguin
 from entities.fish_drop import FishDrop
+from entities.egg import Egg, BabyPenguin
 from system.monitor import SystemMonitor
 from system.cleaner import Cleaner
 from system.save_manager import SaveManager
@@ -27,6 +28,10 @@ def main():
     app_start_time = time.time()
     last_fish_spawn = time.time()
     active_fish = None
+    
+    last_egg_spawn = time.time()
+    active_egg = None
+    baby_penguin = None
     
     # Callback do pinguim
     def on_checkup():
@@ -175,9 +180,25 @@ def main():
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 running = False
-            
+                
+            # Se a janela perder o foco (ex: usuário clicou fora da área opaca da janela), fecha o menu
+            if event.type == pygame.WINDOWFOCUSLOST or event.type == getattr(pygame, 'ACTIVEEVENT', -1):
+                penguin.menu.hide()
+                
             # Checa clique no peixe
             if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+                # Checa clique no ovo
+                if active_egg and active_egg.check_click(mouse_pos):
+                    penguin.audio.play('beep')
+                    if active_egg.hatched:
+                        baby_penguin = BabyPenguin(active_egg.x, active_egg.y)
+                        penguin.audio.play('quack') # Nasceu!
+                        active_egg = None
+                        penguin.bubble.set_text("Meu filhote nasceu!! Obrigado por cuidar do ovo!")
+                        penguin.bubble.add_buttons([])
+                        penguin.substate_expire_time = pygame.time.get_ticks() + 4000
+                
+                # Checa clique no peixe
                 if active_fish and active_fish.check_click(mouse_pos):
                     save_manager.add_fish()
                     penguin.audio.play('beep') # Toca um sonzinho
@@ -188,6 +209,16 @@ def main():
 
         # 3. ATUALIZA ESTADOS (Pinguim, UI, Física)
         penguin.update(mouse_pos)
+        
+        if baby_penguin:
+            baby_penguin.update(penguin.x, penguin.y)
+            
+        # Spawn do Ovo (Apenas um por sessão, ou bem raro)
+        if not baby_penguin and not active_egg and now - last_egg_spawn > random.randint(300, 600):
+            if random.random() < 0.5: # 50% de chance de botar quando timer expira
+                active_egg = Egg(penguin.x, penguin.y)
+                penguin.audio.play('boing')
+            last_egg_spawn = now
         
         # Sistema de Pesca Aleatória (A cada 3 a 8 minutos)
         if active_fish is None and now - last_fish_spawn > random.randint(180, 480):
@@ -203,6 +234,13 @@ def main():
         screen.fill(INVISIBLE_COLOR)
         if active_fish:
             active_fish.draw(screen)
+            
+        if active_egg:
+            active_egg.draw(screen)
+            
+        if baby_penguin:
+            baby_penguin.draw(screen, mouse_pos)
+            
         penguin.draw(screen, mouse_pos)
         
         pygame.display.flip()

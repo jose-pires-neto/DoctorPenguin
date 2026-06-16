@@ -78,6 +78,16 @@ class DialogueBubble:
         self.buttons.clear()
         self.finished_typing_sound = False
         
+    def set_text_instant(self, text):
+        """Atualiza o texto imediatamente sem o efeito de máquina de escrever"""
+        if text != self.full_text:
+            self.full_text = text
+            self.current_text = text
+            self.char_index = len(text)
+            self.is_typing = False
+            self.last_char_time = 0
+            # A conversão para linhas ocorrerá no próximo update()
+        
     def add_buttons(self, button_list):
         """Adiciona botões e os posiciona lado a lado na parte inferior do balão.
         button_list é uma lista de dicionários: [{'text': 'Limpar', 'callback': fn}]"""

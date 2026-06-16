@@ -8,7 +8,7 @@ def draw_broom(surface, penguin_x, penguin_y, time_ms):
     
     # Centro de rotação é a "mão" do pinguim
     center_x = penguin_x - 15
-    center_y = penguin_y + 5
+    center_y = penguin_y - 35
     
     # Criar uma surface temporária para a vassoura
     broom_surf = pygame.Surface((15, 40), pygame.SRCALPHA)
@@ -41,7 +41,7 @@ def draw_zzz(surface, penguin_x, penguin_y, time_ms):
         
         # Movimento oscilante horizontal enquanto sobe
         x = penguin_x + 10 + math.sin(progress * 10) * 10
-        y = penguin_y - 10 - (progress * 30)
+        y = penguin_y - 70 - (progress * 30)
         
         # Desenhar o 'Z' usando linhas ou texto, vamos usar font padrão
         font = pygame.font.SysFont("comicsansms", 16 - (i*2))
@@ -53,15 +53,24 @@ def draw_zzz(surface, penguin_x, penguin_y, time_ms):
 def draw_stethoscope(surface, penguin_x, penguin_y):
     """Desenha um estetoscópio estilizado ao redor do pescoço do pinguim"""
     # Fone (em cima)
-    pygame.draw.arc(surface, (40, 40, 40), (penguin_x - 10, penguin_y - 15, 20, 20), 0, math.pi, 2)
+    pygame.draw.arc(surface, (40, 40, 40), (penguin_x - 10, penguin_y - 55, 20, 20), 0, math.pi, 2)
     # Fio descendo
     pygame.draw.lines(surface, (40, 40, 40), False, [
-        (penguin_x - 10, penguin_y - 5),
-        (penguin_x - 5, penguin_y + 5),
-        (penguin_x, penguin_y + 10),
-        (penguin_x + 5, penguin_y + 10),
-        (penguin_x + 10, penguin_y + 5)
+        (penguin_x - 10, penguin_y - 45),
+        (penguin_x - 5, penguin_y - 35),
+        (penguin_x, penguin_y - 30),
+        (penguin_x + 5, penguin_y - 30),
+        (penguin_x + 10, penguin_y - 35)
     ], 2)
     # Ponta redonda (Sensor)
-    pygame.draw.circle(surface, (192, 192, 192), (penguin_x + 10, penguin_y + 5), 4)
-    pygame.draw.circle(surface, (40, 40, 40), (penguin_x + 10, penguin_y + 5), 4, 1)
+    pygame.draw.circle(surface, (192, 192, 192), (penguin_x + 10, penguin_y - 35), 4)
+    pygame.draw.circle(surface, (40, 40, 40), (penguin_x + 10, penguin_y - 35), 4, 1)
+
+def draw_glasses(surface, penguin_x, penguin_y):
+    """Desenha um óculos de leitura na cara do pinguim"""
+    # Lente esquerda
+    pygame.draw.rect(surface, (20, 20, 20), (penguin_x - 12, penguin_y - 55, 10, 8), 2, border_radius=2)
+    # Lente direita
+    pygame.draw.rect(surface, (20, 20, 20), (penguin_x + 2, penguin_y - 55, 10, 8), 2, border_radius=2)
+    # Ponte do nariz
+    pygame.draw.line(surface, (20, 20, 20), (penguin_x - 2, penguin_y - 51), (penguin_x + 2, penguin_y - 51), 2)

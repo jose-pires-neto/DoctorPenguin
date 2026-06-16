@@ -71,3 +71,18 @@ def get_mouse_pos():
     """
     pos = win32api.GetCursorPos()
     return (pos[0] - SCREEN_X, pos[1] - SCREEN_Y)
+
+def get_floor_y(px, py):
+    """
+    Retorna a coordenada Y do chão (acima da barra de tarefas) para o monitor
+    onde o ponto (px, py) do Pygame está localizado.
+    """
+    try:
+        abs_x = int(px + SCREEN_X)
+        abs_y = int(py + SCREEN_Y)
+        monitor = win32api.MonitorFromPoint((abs_x, abs_y), win32con.MONITOR_DEFAULTTONEAREST)
+        info = win32api.GetMonitorInfo(monitor)
+        work_area = info['Work'] # (left, top, right, bottom) - Exclui barra de tarefas!
+        return work_area[3] - SCREEN_Y
+    except:
+        return SCREEN_HEIGHT
