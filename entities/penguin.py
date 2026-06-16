@@ -27,18 +27,20 @@ class Penguin:
         self.vy = 0
         self.save_manager = save_manager
         
-        self.drawer = PenguinDrawer()
+        # Estado e visual
+        self.state = "WANDERING" # WANDERING, SITTING, HAPPY, CLEANING, TALKING, GRUMPY, HELD, THROWN, POMODORO, REVOLTED, IDLE
+        self.wander_substate = "IDLE_STANDING"
+        self.prop = None # None, "BROOM", "ZZZ", "STETHOSCOPE", "GLASSES"
+        self.color = self.save_manager.get_penguin_color()
+        self.drawer = PenguinDrawer(body_color=self.color)
         self.bubble = DialogueBubble("", x, y, 280, 100)
         self.menu = ContextMenu()
         self.audio = AudioSystem()
         
         # Atributos de Tamagotchi
         self.happiness = 100
-        self.prop = None # "BROOM", "STETHOSCOPE", "ZZZ", "GLASSES", None
         
         # Estados: WANDERING, HELD, THROWN, ALERT, POKED, IDLE, GRUMPY, HAPPY, CLEANING, POMODORO, REVOLTED
-        self.state = "WANDERING"
-        self.wander_substate = "WANDERING" # WANDERING, IDLE_STANDING, SITTING
         self.substate_expire_time = pygame.time.get_ticks() + random.randint(WANDER_MIN_TIME, WANDER_MAX_TIME)
         
         self.pomodoro_end = 0
@@ -59,6 +61,11 @@ class Penguin:
         # Callbacks (definidos pelo main)
         self.on_checkup_request = None
         self.on_exit_request = None
+        
+    def reload_color(self):
+        """Atualiza o drawer com a nova cor recarregada do save manager"""
+        self.color = self.save_manager.get_penguin_color()
+        self.drawer = PenguinDrawer(body_color=self.color)
 
     def set_alert(self, text, buttons):
         """Inicia um alerta do sistema"""
@@ -131,14 +138,16 @@ class Penguin:
                             {'text': 'Cancelar Foco', 'callback': self._cancel_pomodoro}
                         ])
                     else:
-                        self.menu.show(mouse_pos[0], mouse_pos[1], [
+                        options = [
+                            {'text': 'Soneca', 'callback': self._snooze},
                             {'text': 'Focar (25 min)', 'callback': self._start_pomodoro},
                             {'text': 'Fazer Checkup', 'callback': self._trigger_checkup},
-                            {'text': 'Silenciar (1 hora)', 'callback': self._snooze},
-                            {'text': f'Dar um peixe 🐟 ({fishes}x)', 'callback': self._feed},
-                            {'text': 'Fazer carinho', 'callback': self._pet},
-                            {'text': 'Dormir (Sair)', 'callback': self._trigger_exit}
-                        ])
+                            {'text': 'Mudar Cor', 'callback': self._change_color},
+                            {'text': 'Fazer Carinho', 'callback': self._pet},
+                            {'text': f'Dar Peixe ({fishes} restando)', 'callback': self._feed},
+                            {'text': 'Sair do App', 'callback': self._trigger_exit}
+                        ]
+                        self.menu.show(mouse_pos[0], mouse_pos[1], options)
                     return True
                     
         elif event.type == pygame.MOUSEBUTTONUP:
@@ -223,6 +232,18 @@ class Penguin:
         self.menu.hide()
         if self.on_exit_request:
             self.on_exit_request()
+            
+    def _change_color(self):
+        self.menu.hide()
+        # Sorteia uma nova cor aleatória vibrante
+        new_color = (random.randint(50, 255), random.randint(50, 255), random.randint(50, 255))
+        self.save_manager.set_penguin_color(new_color)
+        self.reload_color()
+        self.set_state("HAPPY")
+        self.audio.play('quack')
+        self.bubble.set_text("Wow! Estou de visual novo!!")
+        self.bubble.add_buttons([])
+        self.substate_expire_time = pygame.time.get_ticks() + 4000
 
     def update(self, mouse_pos):
         now = pygame.time.get_ticks()
@@ -416,6 +437,28 @@ class Penguin:
                     self.prop = None
                     self.bubble.set_text("")
                     self.last_action_time = time.time()
+                    
+        elif self.state == "POMODORO":
+            # Permanece sentado olhando para a tela (Sul)
+            self.direction_idx = 0
+            self.vx = 0
+            
+            # Aplica física de gravidade se estiver caindo
+            floor_y = get_floor_y(self.x, self.y) - 40
+            if self.y < floor_y:
+                self.vy += GRAVITY
+                self.y += self.vy
+            else:
+                self.y = floor_y
+                self.vy = 0
+                
+            # Fim do Pomodoro
+            if now > self.pomodoro_end:
+                self.state = "HAPPY"
+                self.prop = None
+                self.audio.play('beep')
+                self.bubble.set_text("Pomodoro concluído! Hora de uma pausa!")
+                self.substate_expire_time = now + 5000
 
         # 3. Atualiza interface (Balão e Botões)
         # Posiciona balão dinamicamente

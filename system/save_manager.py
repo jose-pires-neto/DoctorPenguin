@@ -6,22 +6,28 @@ SAVE_FILE = "save_data.json"
 
 class SaveManager:
     def __init__(self):
-        self.data = {
-            "ignored_processes": {},
-            "fishes": 3 # Começa com 3 peixinhos de brinde
-        }
-        self.load()
+        self.data = self._load()
 
-    def load(self):
+    def _load(self):
         if os.path.exists(SAVE_FILE):
             try:
                 with open(SAVE_FILE, "r") as f:
-                    loaded_data = json.load(f)
-                    self.data.update(loaded_data)
+                    data = json.load(f)
+                    
+                # Fix color tuples which might be saved as lists
+                if 'penguin_color' in data and data['penguin_color']:
+                    data['penguin_color'] = tuple(data['penguin_color'])
+                    
+                return data
             except:
                 pass
+        return {
+            "fish_count": 0,
+            "ignored_processes": {},
+            "penguin_color": None
+        }
 
-    def save(self):
+    def _save(self):
         try:
             with open(SAVE_FILE, "w") as f:
                 json.dump(self.data, f)
@@ -35,7 +41,7 @@ class SaveManager:
         
         expire_time = time.time() + (hours * 3600)
         self.data["ignored_processes"][process_name] = expire_time
-        self.save()
+        self._save()
 
     def is_ignored(self, process_name):
         """Verifica se o processo ainda está ignorado"""
@@ -49,21 +55,30 @@ class SaveManager:
         # Se expirou, pode remover para limpar
         if process_name in self.data["ignored_processes"]:
             del self.data["ignored_processes"][process_name]
-            self.save()
+            self._save()
             
         return False
         
     # --- Fish Inventory ---
     def get_fishes(self):
-        return self.data.get("fishes", 0)
+        return self.data.get("fish_count", 0)
+        
+    def set_penguin_color(self, color):
+        """Salva a cor do pinguim"""
+        self.data["penguin_color"] = color
+        self._save()
+        
+    def get_penguin_color(self):
+        """Retorna a cor do pinguim ou None"""
+        return self.data.get("penguin_color", None)
         
     def add_fish(self, amount=1):
-        self.data["fishes"] = self.get_fishes() + amount
-        self.save()
+        self.data["fish_count"] = self.get_fishes() + amount
+        self._save()
         
     def consume_fish(self):
         if self.get_fishes() > 0:
-            self.data["fishes"] -= 1
-            self.save()
+            self.data["fish_count"] -= 1
+            self._save()
             return True
         return False

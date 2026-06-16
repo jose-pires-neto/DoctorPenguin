@@ -25,7 +25,7 @@ class Egg:
             draw_x += math.sin(pygame.time.get_ticks() * 0.1) * self.shake
             self.shake -= 0.5
             
-        rect = pygame.Rect(draw_x - 15, self.y - 20, 30, 40)
+        rect = pygame.Rect(draw_x - 9, self.y - 12, 18, 24)
         pygame.draw.ellipse(surface, (240, 240, 240), rect)
         # Sombra/Borda do ovo
         pygame.draw.ellipse(surface, (150, 150, 150), rect, 2)
@@ -33,16 +33,16 @@ class Egg:
         # Se rachando
         if self.clicks > 2:
             pygame.draw.lines(surface, (100, 100, 100), False, [
-                (draw_x - 5, self.y - 15),
-                (draw_x + 5, self.y - 5),
-                (draw_x - 5, self.y + 5),
-                (draw_x + 5, self.y + 15)
-            ], 2)
+                (draw_x - 3, self.y - 9),
+                (draw_x + 3, self.y - 3),
+                (draw_x - 3, self.y + 3),
+                (draw_x + 3, self.y + 9)
+            ], 1)
             
     def check_click(self, mouse_pos):
         if not self.active: return False
         
-        rect = pygame.Rect(self.x - 15, self.y - 20, 30, 40)
+        rect = pygame.Rect(self.x - 9, self.y - 12, 18, 24)
         if rect.collidepoint(mouse_pos):
             self.clicks += 1
             self.shake = 5
@@ -61,7 +61,8 @@ class BabyPenguin:
         self.vx = 0
         self.vy = 0
         self.direction_idx = 0
-        self.drawer = PenguinDrawer()
+        self.color = (random.randint(20, 255), random.randint(20, 255), random.randint(20, 255))
+        self.drawer = PenguinDrawer(body_color=self.color)
         
     def update(self, parent_x, parent_y):
         # Segue o pai

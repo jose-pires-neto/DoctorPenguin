@@ -5,7 +5,7 @@ import os
 from config import SPRITESHEET_PATH, SPRITE_COLS, SPRITE_ROWS
 
 class PenguinDrawer:
-    def __init__(self):
+    def __init__(self, body_color=None):
         self.blink_timer = 0
         self.is_blinking = False
         self.blink_duration = 10 # frames
@@ -13,6 +13,7 @@ class PenguinDrawer:
         self.talk_angle = 0
         self.clean_angle = 0
         self.happy_timer = 0
+        self.body_color = body_color
         
         # Carrega a spritesheet se disponível
         self.sprites = None
@@ -30,6 +31,27 @@ class PenguinDrawer:
 
         try:
             sheet = pygame.image.load(full_path).convert_alpha()
+            
+            # Aplica recoloração se houver uma cor definida
+            if self.body_color is not None:
+                width, height = sheet.get_size()
+                pxarray = pygame.PixelArray(sheet)
+                for x in range(width):
+                    for y in range(height):
+                        c = sheet.unmap_rgb(pxarray[x, y])
+                        r, g, b, a = c
+                        # Identifica os pixels azuis (onde o canal azul domina os demais)
+                        if a > 0 and b > max(r, g) + 15:
+                            # Isola a luminosidade para manter o sombreamento intacto
+                            lum = (0.299*r + 0.587*g + 0.114*b) / 255.0
+                            
+                            # Multiplica pela nova cor (com um pequeno boost no brilho base)
+                            new_r = min(255, int(self.body_color[0] * lum * 1.8))
+                            new_g = min(255, int(self.body_color[1] * lum * 1.8))
+                            new_b = min(255, int(self.body_color[2] * lum * 1.8))
+                            pxarray[x, y] = sheet.map_rgb((new_r, new_g, new_b, a))
+                pxarray.close()
+                
             sheet_w, sheet_h = sheet.get_size()
             
             # Dimensões aproximadas de cada frame
@@ -146,7 +168,7 @@ class PenguinDrawer:
             else:
                 sprite_to_draw = self.sprites[2][direction_idx] # Walk 2
                 
-        elif state == "SITTING":
+        elif state == "SITTING" or state == "POMODORO":
             sprite_to_draw = self.sprites[3][direction_idx] # Sentado
             
         elif state == "HAPPY":
@@ -253,8 +275,8 @@ class PenguinDrawer:
         pygame.draw.ellipse(surface, foot_color, 
                             (int(x + 8 * scale_x), int(foot_y + foot_offset_r), foot_w, foot_h))
 
-        # --- CORPO PRINCIPAL (PRETO) ---
-        body_color = (15, 15, 15)
+        # --- CORPO PRINCIPAL ---
+        body_color = self.body_color if self.body_color else (15, 15, 15)
         pygame.draw.ellipse(surface, body_color, (int(px), int(py), int(width * scale_x), int(height)))
         
         # --- BARRIGA (BRANCA) ---

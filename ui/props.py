@@ -69,8 +69,8 @@ def draw_stethoscope(surface, penguin_x, penguin_y):
 def draw_glasses(surface, penguin_x, penguin_y):
     """Desenha um óculos de leitura na cara do pinguim"""
     # Lente esquerda
-    pygame.draw.rect(surface, (20, 20, 20), (penguin_x - 12, penguin_y - 55, 10, 8), 2, border_radius=2)
+    pygame.draw.rect(surface, (20, 20, 20), (penguin_x - 10, penguin_y - 33, 8, 6), 2, border_radius=2)
     # Lente direita
-    pygame.draw.rect(surface, (20, 20, 20), (penguin_x + 2, penguin_y - 55, 10, 8), 2, border_radius=2)
+    pygame.draw.rect(surface, (20, 20, 20), (penguin_x + 2, penguin_y - 33, 8, 6), 2, border_radius=2)
     # Ponte do nariz
-    pygame.draw.line(surface, (20, 20, 20), (penguin_x - 2, penguin_y - 51), (penguin_x + 2, penguin_y - 51), 2)
+    pygame.draw.line(surface, (20, 20, 20), (penguin_x - 2, penguin_y - 30), (penguin_x + 2, penguin_y - 30), 2)
