@@ -20,12 +20,13 @@ BOUNCE_DAMPING = 0.6
 FRICTION = 0.95
 
 class Penguin:
-    def __init__(self, x, y, save_manager):
+    def __init__(self, x, y, save_manager, ai_manager):
         self.x = x
         self.y = y
         self.vx = 0
         self.vy = 0
         self.save_manager = save_manager
+        self.ai_manager = ai_manager
         
         # Estado e visual
         self.state = "WANDERING" # WANDERING, SITTING, HAPPY, CLEANING, TALKING, GRUMPY, HELD, THROWN, POMODORO, REVOLTED, IDLE
@@ -92,7 +93,17 @@ class Penguin:
             "Mais um clique e eu formato o PC!",
             "Por que você me cutuca?!"
         ]
-        self.bubble.set_text(random.choice(phrases))
+        
+        if self.ai_manager.is_enabled:
+            self.bubble.set_text("...")
+            self.ai_manager.request_dialogue(
+                event_context="O usuário acabou de me dar uma cutucada (clique) muito dolorida e eu estou irritado.",
+                callback=lambda t: self.bubble.set_text(t),
+                fallback=random.choice(phrases)
+            )
+        else:
+            self.bubble.set_text(random.choice(phrases))
+            
         self.bubble.add_buttons([])
         self.last_action_time = time.time()
         self.substate_expire_time = pygame.time.get_ticks() + 3000 # Volta a passear depois de 3 segundos
@@ -138,16 +149,43 @@ class Penguin:
                             {'text': 'Cancelar Foco', 'callback': self._cancel_pomodoro}
                         ])
                     else:
+                        ai_text = 'Desativar IA' if self.save_manager.is_ai_enabled() else 'Ativar IA'
                         mute_text = 'Desmutar Som' if self.audio.muted else 'Mutar Som'
                         options = [
-                            {'text': 'Soneca', 'callback': self._snooze},
-                            {'text': 'Focar (25 min)', 'callback': self._start_pomodoro},
-                            {'text': 'Fazer Checkup', 'callback': self._trigger_checkup},
-                            {'text': mute_text, 'callback': self._toggle_mute},
-                            {'text': 'Mudar Cor', 'callback': self._change_color},
-                            {'text': 'Fazer Carinho', 'callback': self._pet},
-                            {'text': f'Dar Peixe ({fishes} restando)', 'callback': self._feed},
-                            {'text': 'Sair do App', 'callback': self._trigger_exit}
+                            {
+                                'text': '▶️ Ações ►',
+                                'submenu': [
+                                    {'text': 'Soneca', 'callback': self._snooze},
+                                    {'text': 'Fazer Checkup', 'callback': self._trigger_checkup}
+                                ]
+                            },
+                            {
+                                'text': '🍅 Foco/Saúde ►',
+                                'submenu': [
+                                    {'text': 'Focar (25 min)', 'callback': self._start_pomodoro}
+                                ]
+                            },
+                            {
+                                'text': '🎨 Interagir ►',
+                                'submenu': [
+                                    {'text': 'Mudar Cor', 'callback': self._change_color},
+                                    {'text': 'Fazer Carinho', 'callback': self._pet},
+                                    {'text': f'Dar Peixe ({fishes}x)', 'callback': self._feed}
+                                ]
+                            },
+                            {
+                                'text': '🤖 IA ►',
+                                'submenu': [
+                                    {'text': ai_text, 'callback': self._toggle_ai}
+                                ]
+                            },
+                            {
+                                'text': '⚙️ Opções ►',
+                                'submenu': [
+                                    {'text': mute_text, 'callback': self._toggle_mute},
+                                    {'text': 'Sair do App', 'callback': self._trigger_exit}
+                                ]
+                            }
                         ]
                         self.menu.show(mouse_pos[0], mouse_pos[1], options)
                     return True
@@ -234,6 +272,20 @@ class Penguin:
         self.menu.hide()
         if self.on_exit_request:
             self.on_exit_request()
+            
+    def _toggle_ai(self):
+        self.menu.hide()
+        current = self.save_manager.is_ai_enabled()
+        self.save_manager.set_ai_enabled(not current)
+        self.ai_manager.enable(not current)
+        
+        self.set_state("HAPPY")
+        if not current:
+            self.bubble.set_text("IA Ativada! Cérebro nativo ativando...")
+        else:
+            self.bubble.set_text("IA Desativada. Voltando a ser um pinguim simples.")
+        self.bubble.add_buttons([])
+        self.substate_expire_time = pygame.time.get_ticks() + 4000
             
     def _toggle_mute(self):
         self.menu.hide()
@@ -427,14 +479,26 @@ class Penguin:
             if self.wander_substate in ["IDLE_STANDING", "SITTING"] and time.time() - self.last_action_time > 10:
                 if random.random() < 0.05:
                     self.state = "IDLE"
-                    self.bubble.set_text(random.choice([
+                    
+                    phrases = [
                         "Zzz...", 
                         "Dica: Reiniciar resolve 90% dos problemas.",
                         "Lembre de beber água!",
                         "Eu sou open source, sabia?"
-                    ]))
+                    ]
+                    
+                    if self.ai_manager.is_enabled:
+                        self.bubble.set_text("...")
+                        self.ai_manager.request_dialogue(
+                            event_context="Estou ocioso no computador. Dê uma dica aleatória sobre tecnologia ou produtividade, ou apenas uma saudação carinhosa.",
+                            callback=lambda t: self.bubble.set_text(t),
+                            fallback=random.choice(phrases)
+                        )
+                    else:
+                        self.bubble.set_text(random.choice(phrases))
+                        
                     self.last_action_time = time.time()
-                    self.substate_expire_time = now + 4000
+                    self.substate_expire_time = now + 6000
                     
         elif self.state in ["IDLE", "POKED", "GRUMPY", "HAPPY", "CLEANING", "ALERT"]:
             if now > self.substate_expire_time:

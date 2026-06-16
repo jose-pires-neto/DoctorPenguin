@@ -24,7 +24,8 @@ class SaveManager:
         return {
             "fish_count": 0,
             "ignored_processes": {},
-            "penguin_color": None
+            "penguin_color": None,
+            "ai_enabled": False
         }
 
     def _save(self):
@@ -82,3 +83,10 @@ class SaveManager:
             self._save()
             return True
         return False
+        
+    def set_ai_enabled(self, status):
+        self.data["ai_enabled"] = status
+        self._save()
+        
+    def is_ai_enabled(self):
+        return self.data.get("ai_enabled", False)

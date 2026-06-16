@@ -1,6 +1,8 @@
-pygame>=2.5.0
-psutil>=5.9.0
-pywin32>=306
+pygame==2.6.1
+psutil==6.0.0
+pywin32==306
+llama-cpp-python
+huggingface_hub
 Pillow>=10.0.0
 scipy>=1.11.0
 numpy>=1.26.0

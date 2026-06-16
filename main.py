@@ -9,13 +9,16 @@ from entities.egg import Egg, BabyPenguin
 from system.monitor import SystemMonitor
 from system.cleaner import Cleaner
 from system.save_manager import SaveManager
+from system.ai_manager import AIManager
 
 def main():
     screen, hwnd = setup_transparent_window("DoctorPenguin")
     
     # Inicializa Entidades
     save_manager = SaveManager()
-    penguin = Penguin(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2, save_manager)
+    ai_manager = AIManager()
+    ai_manager.enable(save_manager.is_ai_enabled())
+    penguin = Penguin(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2, save_manager, ai_manager)
     monitor = SystemMonitor()
     cleaner = Cleaner()
     
@@ -134,18 +137,33 @@ def main():
             
             if type == "RAM":
                 cleaner.kill_process(target)
+                context = f"Eu acabei de fechar o processo pesadão '{target}' e liberei memória RAM."
             elif type == "TRASH":
                 cleaner.empty_recycle_bin()
+                context = "Eu acabei de esvaziar a lixeira fedorenta e o PC está mais limpo."
             elif type == "TEMP":
                 cleaner.clean_temp_files()
+                context = "Eu acabei de apagar os arquivos temporários e liberei espaço no disco."
                 
             # Mostra mensagem de sucesso
-            penguin.set_state("HAPPY")
-            penguin.bubble.set_text("Problema resolvido! Seu PC está respirando melhor agora.")
-            penguin.bubble.add_buttons([
-                {'text': 'Ok', 'callback': lambda: handle_dismiss()}
-            ])
-            penguin.substate_expire_time = pygame.time.get_ticks() + 5000
+            def on_finish(text):
+                penguin.set_state("HAPPY")
+                penguin.bubble.set_text(text)
+                penguin.bubble.add_buttons([
+                    {'text': 'Ok', 'callback': lambda: handle_dismiss()}
+                ])
+                penguin.substate_expire_time = pygame.time.get_ticks() + 5000
+                
+            if ai_manager.is_enabled:
+                penguin.bubble.set_text("...")
+                ai_manager.request_dialogue(
+                    event_context=context,
+                    callback=on_finish,
+                    fallback="Problema resolvido! Seu PC está respirando melhor agora."
+                )
+            else:
+                on_finish("Problema resolvido! Seu PC está respirando melhor agora.")
+                
             cooldown_until = time.time() + 30 # 30s sem encher o saco
             
         def handle_human_health():
