@@ -32,6 +32,8 @@ __pycache__/
 .env
 save_data.json
 brain.json
+pyrightconfig.json
+temp_voice.mp3
 
 # Build e empacotamento
 build/

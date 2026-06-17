@@ -43,7 +43,7 @@ class Button:
 
 
 class DialogueBubble:
-    def __init__(self, text, x, y, width, max_height=200, audio_system=None):
+    def __init__(self, text, x, y, width, max_height=200, audio_system=None, voice_system=None):
         """Cria um balão de diálogo estilo hacker terminal.
         x, y representam o canto superior esquerdo do balão."""
         self.full_text = text
@@ -53,6 +53,7 @@ class DialogueBubble:
         self.width = width
         self.max_height = max_height
         self.audio_system = audio_system
+        self.voice_system = voice_system
         
         # Typewriter effect (máquina de escrever)
         self.char_index = 0
@@ -80,6 +81,9 @@ class DialogueBubble:
         self.buttons.clear()
         self.finished_typing_sound = False
         
+        if self.voice_system:
+            self.voice_system.speak(text)
+        
     def set_text_instant(self, text):
         """Atualiza o texto imediatamente sem o efeito de máquina de escrever"""
         if text != self.full_text:
@@ -89,6 +93,8 @@ class DialogueBubble:
             self.is_typing = False
             self.last_char_time = 0
             # A conversão para linhas ocorrerá no próximo update()
+            if self.voice_system:
+                self.voice_system.speak(text)
         
     def add_buttons(self, button_list):
         """Adiciona botões e os posiciona lado a lado na parte inferior do balão.

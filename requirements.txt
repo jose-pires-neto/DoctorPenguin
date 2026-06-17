@@ -6,3 +6,5 @@ huggingface_hub
 Pillow>=10.0.0
 scipy>=1.11.0
 numpy>=1.26.0
+pyttsx3>=2.90
+edge-tts>=7.0.0

@@ -25,7 +25,9 @@ class SaveManager:
             "fish_count": 0,
             "ignored_processes": {},
             "penguin_color": None,
-            "ai_enabled": False
+            "ai_enabled": False,
+            "voice_enabled": False,
+            "voice_id": None
         }
 
     def _save(self):
@@ -90,3 +92,18 @@ class SaveManager:
         
     def is_ai_enabled(self):
         return self.data.get("ai_enabled", False)
+
+    def is_voice_enabled(self):
+        return self.data.get("voice_enabled", False)
+
+    def set_voice_enabled(self, status):
+        self.data["voice_enabled"] = status
+        self._save()
+
+    def get_voice_id(self):
+        return self.data.get("voice_id", None)
+
+    def set_voice_id(self, voice_id):
+        self.data["voice_id"] = voice_id
+        self._save()
+

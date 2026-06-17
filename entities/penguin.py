@@ -9,6 +9,7 @@ from ui.components import DialogueBubble
 from ui.menu import ContextMenu
 from ui.props import draw_broom, draw_zzz, draw_stethoscope, draw_glasses
 from core.audio import AudioSystem
+from core.voice import VoiceSystem
 import win32api
 import datetime
 
@@ -37,7 +38,8 @@ class Penguin:
         self.color = self.save_manager.get_penguin_color()
         self.drawer = PenguinDrawer(body_color=self.color)
         self.audio = AudioSystem()
-        self.bubble = DialogueBubble("", x, y, 280, 100, audio_system=self.audio)
+        self.voice_system = VoiceSystem(self.save_manager)
+        self.bubble = DialogueBubble("", x, y, 280, 100, audio_system=self.audio, voice_system=self.voice_system)
         self.menu = ContextMenu()
         
         # Atributos de Tamagotchi
@@ -229,6 +231,10 @@ class Penguin:
                                 ]
                             },
                             {
+                                'text': '🗣️ Voz ►',
+                                'submenu': self._get_voice_submenu()
+                            },
+                            {
                                 'text': '⚙️ Opções ►',
                                 'submenu': [
                                     {'text': mute_text, 'callback': self._toggle_mute},
@@ -375,6 +381,51 @@ class Penguin:
             self.bubble.set_text("IA Ativada! Cérebro nativo ativando...")
         else:
             self.bubble.set_text("IA Desativada. Voltando a ser um pinguim simples.")
+        self.bubble.add_buttons([])
+        self.substate_expire_time = pygame.time.get_ticks() + 4000
+
+    def _get_voice_submenu(self):
+        voice_text = 'Desativar Voz' if self.save_manager.is_voice_enabled() else 'Ativar Voz'
+        submenu = [{'text': voice_text, 'callback': self._toggle_voice}]
+        
+        voices = self.voice_system.get_voices()
+        if voices:
+            voice_list = []
+            # Adiciona apenas as primeiras 5 vozes para não estourar a tela se houver muitas
+            for v in voices[:5]:
+                # checkmark if selected
+                prefix = "✓ " if self.save_manager.get_voice_id() == v['id'] else ""
+                voice_list.append({
+                    'text': prefix + v['name'].split('-')[0].strip()[:15], 
+                    'callback': lambda v_id=v['id']: self._set_voice(v_id)
+                })
+            submenu.append({
+                'text': 'Selecionar Voz ►',
+                'submenu': voice_list
+            })
+        return submenu
+
+    def _toggle_voice(self):
+        self.menu.hide()
+        current = self.save_manager.is_voice_enabled()
+        self.save_manager.set_voice_enabled(not current)
+        
+        self.set_state("HAPPY")
+        if not current:
+            self.bubble.set_text("Voz Ativada! Agora eu sei falar de verdade!")
+        else:
+            self.bubble.set_text("Voz Desativada. Voltando para os balões silenciosos.")
+        self.bubble.add_buttons([])
+        self.substate_expire_time = pygame.time.get_ticks() + 4000
+
+    def _set_voice(self, voice_id):
+        self.menu.hide()
+        self.save_manager.set_voice_id(voice_id)
+        if not self.save_manager.is_voice_enabled():
+            self.save_manager.set_voice_enabled(True)
+            
+        self.set_state("HAPPY")
+        self.bubble.set_text("Pronto! Minhas cordas vocais foram afinadas!")
         self.bubble.add_buttons([])
         self.substate_expire_time = pygame.time.get_ticks() + 4000
             
