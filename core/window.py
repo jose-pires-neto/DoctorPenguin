@@ -20,6 +20,22 @@ def setup_transparent_window(title="DoctorPenguin"):
     screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.NOFRAME)
     pygame.display.set_caption(title)
     
+    # Carrega e define o icone da barra de tarefas
+    try:
+        import sys
+        if hasattr(sys, '_MEIPASS'):
+            base_dir = sys._MEIPASS
+        else:
+            base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        
+        icon_path = os.path.join(base_dir, "icon.ico")
+        if os.path.exists(icon_path):
+            icon_surf = pygame.image.load(icon_path)
+            pygame.display.set_icon(icon_surf)
+    except Exception as e:
+        print(f"Erro ao definir icone: {e}")
+    
+    
     # Obtém o handle (HWND) da janela recém-criada
     hwnd = win32gui.FindWindow(None, title)
     
