@@ -10,6 +10,7 @@ from ui.menu import ContextMenu
 from ui.props import draw_broom, draw_zzz, draw_stethoscope, draw_glasses
 from core.audio import AudioSystem
 import win32api
+import datetime
 
 # Constantes de Movimentação e Física
 WANDER_MIN_TIME = 2000
@@ -65,11 +66,32 @@ class Penguin:
         self.on_exit_request = None
 
     def get_app_context(self):
-        if not hasattr(self, 'monitor') or not self.monitor: return ""
+        context_str = ""
+        try:
+            now = datetime.datetime.now()
+            
+            # Formata Data e Hora
+            meses = ["", "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"]
+            data_str = f"{now.day} de {meses[now.month]}"
+            
+            context_str += f" [Nota de Sistema: Hoje é {data_str}, e agora são exatamente {now.strftime('%H:%M')}."
+        except:
+            context_str += " [Nota de Sistema:"
+            
+        if not hasattr(self, 'monitor') or not self.monitor: 
+            return context_str + "]"
+            
+        # Puxa o clima do Monitor
+        if hasattr(self.monitor, 'weather_info') and self.monitor.weather_info != "Desconhecido":
+            context_str += f" Clima local: {self.monitor.weather_info}."
+            
         proc, title = self.monitor.get_active_window_info()
         if proc and title:
-            return f" [Nota: O usuário está focando na janela '{title}' do processo '{proc}']"
-        return ""
+            context_str += f" O usuário está usando a janela '{title}' do aplicativo '{proc}'.]"
+        else:
+            context_str += "]"
+            
+        return context_str
 
     def _on_ai_response(self, text):
         """Callback usado quando o Ollama retorna uma resposta."""

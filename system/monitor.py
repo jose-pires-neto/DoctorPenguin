@@ -1,4 +1,7 @@
 import os
+import threading
+import urllib.request
+import json
 import ctypes
 import threading
 import time
@@ -24,9 +27,34 @@ class SystemMonitor:
         self._temp_size = 0
         self._temp_scanning = False
         self._last_temp_scan = 0
+        self.last_cpu_percent = 0
+        self.last_ram_percent = 0
+        self.weather_info = "Desconhecido"
+        self._start_weather_thread()
         
         # Inicia a primeira varredura de temporários em background
         self.trigger_temp_scan_async()
+
+    def _start_weather_thread(self):
+        def fetch():
+            try:
+                # 1. Pega localidade via IP
+                req = urllib.request.Request("http://ip-api.com/json/", headers={'User-Agent': 'Mozilla/5.0'})
+                with urllib.request.urlopen(req, timeout=5) as response:
+                    data = json.loads(response.read().decode())
+                    city = data.get("city", "")
+                    
+                    if city:
+                        # 2. Pega clima daquela cidade via wttr.in (formato texto limpo)
+                        weather_url = f"https://wttr.in/{city.replace(' ', '+')}?format=%l:+%C,+%t"
+                        req_w = urllib.request.Request(weather_url, headers={'User-Agent': 'curl/7.68.0'})
+                        with urllib.request.urlopen(req_w, timeout=5) as res_w:
+                            self.weather_info = res_w.read().decode('utf-8').strip()
+            except Exception as e:
+                print(f"[Monitor] Erro ao buscar clima/local: {e}")
+                
+        # Roda em thread separada para não travar o pinguim
+        threading.Thread(target=fetch, daemon=True).start()
 
     def get_idle_time(self):
         """Retorna o tempo de inatividade (idle time) do usuário em segundos."""
