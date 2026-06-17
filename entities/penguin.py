@@ -20,13 +20,14 @@ BOUNCE_DAMPING = 0.6
 FRICTION = 0.95
 
 class Penguin:
-    def __init__(self, x, y, save_manager, ai_manager):
+    def __init__(self, x, y, save_manager, ai_manager, monitor):
         self.x = x
         self.y = y
         self.vx = 0
         self.vy = 0
         self.save_manager = save_manager
         self.ai_manager = ai_manager
+        self.monitor = monitor
         
         # Estado e visual
         self.state = "WANDERING" # WANDERING, SITTING, HAPPY, CLEANING, TALKING, GRUMPY, HELD, THROWN, POMODORO, REVOLTED, IDLE
@@ -62,6 +63,13 @@ class Penguin:
         # Callbacks (definidos pelo main)
         self.on_checkup_request = None
         self.on_exit_request = None
+
+    def get_app_context(self):
+        if not hasattr(self, 'monitor') or not self.monitor: return ""
+        proc, title = self.monitor.get_active_window_info()
+        if proc and title:
+            return f" [Nota: O usuário está focando na janela '{title}' do processo '{proc}']"
+        return ""
 
     def _on_ai_response(self, text):
         """Callback usado quando o Ollama retorna uma resposta."""
@@ -103,7 +111,7 @@ class Penguin:
         if self.ai_manager.is_enabled:
             self.bubble.set_text("...")
             self.ai_manager.request_dialogue(
-                event_context=f"O usuário acabou de me dar uma cutucada (clique) dolorida com o mouse. Minha felicidade atual é de {self.happiness}/100.",
+                event_context=f"O usuário acabou de me dar uma cutucada (clique) dolorida com o mouse. Minha felicidade atual é de {self.happiness}/100." + self.get_app_context(),
                 callback=self._on_ai_response,
                 fallback=random.choice(phrases)
             )
@@ -147,7 +155,7 @@ class Penguin:
                     if self.ai_manager.is_enabled:
                         self.bubble.set_text("...")
                         self.ai_manager.request_dialogue(
-                            event_context=f"O usuário acabou de me segurar e me levantar com o mouse do computador! Estou pendurado! Felicidade: {self.happiness}/100.",
+                            event_context=f"O usuário acabou de me segurar e me levantar com o mouse do computador! Estou pendurado! Felicidade: {self.happiness}/100." + self.get_app_context(),
                             callback=self._on_ai_response,
                             fallback=random.choice(["Me solta!", "Socorro!", "Eu tenho labirintite!"])
                         )
@@ -219,7 +227,7 @@ class Penguin:
                     if self.ai_manager.is_enabled:
                         self.bubble.set_text("...")
                         self.ai_manager.request_dialogue(
-                            event_context=f"O usuário acabou de me arremessar na tela do computador e eu estou voando! Felicidade: {self.happiness}/100.",
+                            event_context=f"O usuário acabou de me arremessar na tela do computador e eu estou voando! Felicidade: {self.happiness}/100." + self.get_app_context(),
                             callback=self._on_ai_response,
                             fallback="WAAAHHH!"
                         )
@@ -279,7 +287,7 @@ class Penguin:
             if self.ai_manager.is_enabled:
                 self.bubble.set_text("...")
                 self.ai_manager.request_dialogue(
-                    event_context=f"O usuário acabou de me dar um peixe delicioso! Eu amo peixes! Felicidade: {self.happiness}/100.",
+                    event_context=f"O usuário acabou de me dar um peixe delicioso! Eu amo peixes! Felicidade: {self.happiness}/100." + self.get_app_context(),
                     callback=self._on_ai_response,
                     fallback="Nham nham! Delícia! Obrigado, mestre!"
                 )
@@ -301,7 +309,7 @@ class Penguin:
         if self.ai_manager.is_enabled:
             self.bubble.set_text("...")
             self.ai_manager.request_dialogue(
-                event_context=f"O usuário está fazendo um carinho muito bom em mim. Felicidade: {self.happiness}/100.",
+                event_context=f"O usuário está fazendo um carinho muito bom em mim. Felicidade: {self.happiness}/100." + self.get_app_context(),
                 callback=self._on_ai_response,
                 fallback="hehe... isso faz cosquinha!"
             )
@@ -415,7 +423,7 @@ class Penguin:
                     if self.ai_manager.is_enabled:
                         self.bubble.set_text("...")
                         self.ai_manager.request_dialogue(
-                            event_context=f"Acabei de cair no chão depois de ser arremessado. Minha felicidade chegou a ZERO. Estou revoltado com o usuário e vou ameaçá-lo!",
+                            event_context=f"Acabei de cair no chão depois de ser arremessado. Minha felicidade chegou a ZERO. Estou revoltado com o usuário e vou ameaçá-lo!" + self.get_app_context(),
                             callback=self._on_ai_response,
                             fallback="ESTOU REVOLTADO!!"
                         )
@@ -483,7 +491,7 @@ class Penguin:
                 self.last_revolt_time = time.time()
                 if self.ai_manager.is_enabled:
                     self.ai_manager.request_dialogue(
-                        event_context=f"Acabei de atacar o mouse do usuário porque estava irritado. Vou dar um aviso para ele cuidar melhor de mim.",
+                        event_context=f"Acabei de atacar o mouse do usuário porque estava irritado. Vou dar um aviso para ele cuidar melhor de mim." + self.get_app_context(),
                         callback=self._on_ai_response,
                         fallback="Me dê atenção ou eu ataco de novo daqui a pouco!!"
                     )
@@ -550,13 +558,13 @@ class Penguin:
                             "Conte uma piada bem curta e engraçada.",
                             "Dê um conselho engraçado ou inútil.",
                             "Reclame sobre estar com tédio.",
-                            "Fale um fato muito curioso sobre pinguins, gelo ou computadores.",
-                            "Dê uma dica rápida de produtividade para o usuário.",
-                            "Faça uma saudação diga algo sobre o usuário."
+                            "Faça uma piada ou comentário atrevido sobre o aplicativo ou aba que o usuário está usando no momento (leia a nota de contexto).",
+                            "Faça uma analogia maluca do aplicativo que o usuário está usando com gelo ou peixes.",
+                            "Dê uma dica rápida de produtividade para o usuário."
                         ]
                         ideia_escolhida = random.choice(ideias)
                         self.ai_manager.request_dialogue(
-                            event_context=f"Estou ocioso no computador sem fazer nada. Felicidade: {self.happiness}/100. Sua tarefa agora é: {ideia_escolhida}",
+                            event_context=f"Estou ocioso no computador sem fazer nada. Felicidade: {self.happiness}/100. Sua tarefa agora é: {ideia_escolhida}" + self.get_app_context(),
                             callback=self._on_ai_response,
                             fallback=random.choice(phrases)
                         )

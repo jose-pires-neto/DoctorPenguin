@@ -41,6 +41,31 @@ class SystemMonitor:
             print(f"[Monitor] Erro ao obter tempo de ócio: {e}")
             return 0.0
 
+    def get_active_window_info(self):
+        """Retorna (nome_processo, titulo_janela) focada atualmente, ou (None, None)"""
+        try:
+            hwnd = ctypes.windll.user32.GetForegroundWindow()
+            if not hwnd:
+                return None, None
+                
+            length = ctypes.windll.user32.GetWindowTextLengthW(hwnd)
+            buf = ctypes.create_unicode_buffer(length + 1)
+            ctypes.windll.user32.GetWindowTextW(hwnd, buf, length + 1)
+            title = buf.value
+            
+            pid = ctypes.c_ulong()
+            ctypes.windll.user32.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
+            
+            try:
+                process = psutil.Process(pid.value)
+                name = process.name()
+                return name, title
+            except (psutil.NoSuchProcess, psutil.AccessDenied):
+                return None, title
+        except Exception as e:
+            print(f"[Monitor] Erro ao obter janela ativa: {e}")
+            return None, None
+
     def get_ram_info(self):
         """Retorna (porcentagem_ram, nome_processo_pesado, ram_processo_pesado_mb)"""
         try:

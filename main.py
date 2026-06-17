@@ -18,9 +18,9 @@ def main():
     save_manager = SaveManager()
     ai_manager = AIManager()
     ai_manager.enable(save_manager.is_ai_enabled())
-    penguin = Penguin(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2, save_manager, ai_manager)
     monitor = SystemMonitor()
     cleaner = Cleaner()
+    penguin = Penguin(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2, save_manager, ai_manager, monitor)
     
     clock = pygame.time.Clock()
     running = True
@@ -68,16 +68,16 @@ def main():
             
             # 0. Checa Saúde Humana (a cada 2 horas)
             if now - app_start_time > 7200: # 7200 segundos = 2 horas
-                alert_text = "Mestre! Você está há muito tempo focado...\nBeba uma água e alongue as costas para não bugar sua coluna!"
-                alert_buttons = [
-                    {'text': 'Já bebi!', 'callback': lambda: handle_human_health()}
-                ]
+                alert_fallback = "Mestre! Você está há muito tempo focado...\nBeba uma água e alongue as costas para não bugar sua coluna!"
+                ai_prompt = "O usuário está a mais de 2 horas focado no computador sem parar. Avise ele para beber água e esticar as pernas."
+                alert_buttons = [{'text': 'Já bebi!', 'callback': lambda: handle_human_health()}]
                 alert_type = "HUMAN"
             else:
                 # 1. Checa RAM
                 ram_percent, proc_name, proc_ram = monitor.get_ram_info()
                 if ram_percent > RAM_THRESHOLD and proc_name and not save_manager.is_ignored(proc_name):
-                    alert_text = f"Sua RAM chegou a {ram_percent:.1f}%!\nO processo '{proc_name}' usa {proc_ram:.1f} MB!\nQuer que eu feche ele para aliviar o PC?"
+                    alert_fallback = f"Sua RAM chegou a {ram_percent:.1f}%!\nO processo '{proc_name}' usa {proc_ram:.1f} MB!\nQuer que eu feche ele para aliviar o PC?"
+                    ai_prompt = f"A memória RAM do PC atingiu {ram_percent:.1f}% e o processo '{proc_name}' está usando {proc_ram:.1f} MB. Avise o usuário e pergunte se ele quer que feche esse processo."
                     alert_buttons = [
                         {'text': 'Encerrar', 'callback': lambda: handle_clean("RAM", proc_name)},
                         {'text': 'Ignorar', 'callback': lambda: handle_ignore("RAM", proc_name)}
@@ -89,24 +89,23 @@ def main():
                     # Checa Bateria
                     batt_percent, batt_plugged = monitor.check_battery()
                     if batt_percent is not None and batt_percent <= BATTERY_THRESHOLD and not batt_plugged:
-                        alert_text = f"Mestre, socorro! Bateria em {batt_percent}%!\nPor favor, conecte o carregador antes que eu apague!"
-                        alert_buttons = [
-                            {'text': 'Ok, já vou', 'callback': lambda: handle_dismiss()}
-                        ]
+                        alert_fallback = f"Mestre, socorro! Bateria em {batt_percent}%!\nPor favor, conecte o carregador antes que eu apague!"
+                        ai_prompt = f"A bateria do notebook do usuário está quase acabando (apenas {batt_percent}%). Peça socorro e mande ele conectar o carregador rápido!"
+                        alert_buttons = [{'text': 'Ok, já vou', 'callback': lambda: handle_dismiss()}]
                         alert_type = "BATT"
                     else:
                         # Checa Internet
                         if not monitor.check_internet():
-                            alert_text = "Ei! A internet caiu! Não consigo contatar minha família na Antártida!\nVerifique seu roteador!"
-                            alert_buttons = [
-                                {'text': 'Ok', 'callback': lambda: handle_dismiss()}
-                            ]
+                            alert_fallback = "Ei! A internet caiu! Não consigo contatar minha família na Antártida!\nVerifique seu roteador!"
+                            ai_prompt = "A internet do computador caiu. Reclame que não consegue falar com sua família na Antártida e peça para checar o roteador."
+                            alert_buttons = [{'text': 'Ok', 'callback': lambda: handle_dismiss()}]
                             alert_type = "NET"
                         else:
                             # Checa Lixeira
                             items, size_mb = monitor.get_recycle_bin_info()
                             if items >= RECYCLE_BIN_THRESHOLD:
-                                alert_text = f"Sua Lixeira está fedendo!\nTem {items} itens ocupando {size_mb:.1f} MB de espaço.\nPosso esvaziar a lixeira para você?"
+                                alert_fallback = f"Sua Lixeira está fedendo!\nTem {items} itens ocupando {size_mb:.1f} MB de espaço.\nPosso esvaziar a lixeira para você?"
+                                ai_prompt = f"A lixeira do Windows está cheia e fedendo, com {items} itens ocupando {size_mb:.1f} MB. Reclame do fedor e pergunte se pode esvaziar."
                                 alert_buttons = [
                                     {'text': 'Esvaziar', 'callback': lambda: handle_clean("TRASH", None)},
                                     {'text': 'Ignorar', 'callback': lambda: handle_ignore("TRASH", None)}
@@ -117,7 +116,8 @@ def main():
                                 # Checa Temporários
                                 temp_mb = monitor.get_temp_info() / (1024 * 1024)
                                 if temp_mb > (TEMP_THRESHOLD / (1024 * 1024)):
-                                    alert_text = f"Estimo mais de {temp_mb:.1f} MB de arquivos inúteis na pasta Temp.\nPosso fazer a faxina?"
+                                    alert_fallback = f"Estimo mais de {temp_mb:.1f} MB de arquivos inúteis na pasta Temp.\nPosso fazer a faxina?"
+                                    ai_prompt = f"A pasta de arquivos temporários do PC acumulou mais de {temp_mb:.1f} MB de lixo inútil. Ofereça-se para fazer uma faxina e limpar."
                                     alert_buttons = [
                                         {'text': 'Limpar', 'callback': lambda: handle_clean("TEMP", None)},
                                         {'text': 'Ignorar', 'callback': lambda: handle_ignore("TEMP", None)}
@@ -125,8 +125,21 @@ def main():
                                     alert_type = "TEMP"
                                     penguin.prop = "BROOM"
                         
-            if alert_text:
-                penguin.set_alert(alert_text, alert_buttons)
+            if alert_type:
+                if ai_manager.is_enabled:
+                    penguin.set_state("ALERT")
+                    penguin.bubble.set_text("...")
+                    penguin.substate_expire_time = pygame.time.get_ticks() + 15000
+                    
+                    def on_ai_alert(text):
+                        if penguin.state == "ALERT":
+                            penguin.bubble.set_text(text)
+                            penguin.bubble.add_buttons(alert_buttons)
+                            penguin.substate_expire_time = pygame.time.get_ticks() + 15000
+                            
+                    ai_manager.request_dialogue(ai_prompt, on_ai_alert, alert_fallback)
+                else:
+                    penguin.set_alert(alert_fallback, alert_buttons)
                 
         # Callbacks locais das ações do alerta
         def handle_clean(type, target):

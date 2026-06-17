@@ -3,6 +3,7 @@ import urllib.request
 import json
 import queue
 import time
+import re
 
 class AIManager:
     def __init__(self):
@@ -20,6 +21,7 @@ class AIManager:
             "Você é o Doctor Penguin, um pinguim mascote virtual de computador. Você mora no PC do usuário e ajuda a cuidar do sistema. "
             "Você é inteligente, engraçado e bastante atrevido. Você ama peixes, frio, gelo e a Antártida. "
             "Suas falas devem ser SEMPRE curtas e direta [no máximo 10 palavras em portugues brasil (PT-BR)]."
+            "NUNCA descreva suas ações (não use asteriscos como *sorri* ou *olha*). Fale diretamente o texto."
             "Reaja ao contexto fornecido. NÃO dê explicações extras, NÃO saia do personagem."
         )
 
@@ -106,9 +108,11 @@ class AIManager:
                     if response.status == 200:
                         resp_data = json.loads(response.read().decode("utf-8"))
                         ai_text = resp_data.get("response", "").strip()
+                        # Remove textos entre asteriscos ou underscores (roleplay)
+                        ai_text = re.sub(r'[*_][^*_]*[*_]', '', ai_text).strip()
                         # Remove aspas extras que a IA as vezes coloca
                         if ai_text.startswith('"') and ai_text.endswith('"'):
-                            ai_text = ai_text[1:-1]
+                            ai_text = ai_text[1:-1].strip()
                             
                         if ai_text:
                             final_callback(ai_text)
