@@ -62,6 +62,12 @@ class Penguin:
         # Callbacks (definidos pelo main)
         self.on_checkup_request = None
         self.on_exit_request = None
+
+    def _on_ai_response(self, text):
+        """Callback usado quando o Ollama retorna uma resposta."""
+        self.bubble.set_text(text)
+        # Garante no mínimo 7 segundos na tela após a IA responder
+        self.substate_expire_time = max(self.substate_expire_time, pygame.time.get_ticks() + 7000)
         
     def reload_color(self):
         """Atualiza o drawer com a nova cor recarregada do save manager"""
@@ -77,7 +83,7 @@ class Penguin:
         
     def set_state(self, new_state):
         self.state = new_state
-        if new_state in ["WANDERING", "THROWN", "HELD"]:
+        if new_state in ["THROWN", "HELD"]:
             self.bubble.set_text("")
             self.bubble.buttons.clear()
             
@@ -97,8 +103,8 @@ class Penguin:
         if self.ai_manager.is_enabled:
             self.bubble.set_text("...")
             self.ai_manager.request_dialogue(
-                event_context="O usuário acabou de me dar uma cutucada (clique) muito dolorida e eu estou irritado.",
-                callback=lambda t: self.bubble.set_text(t),
+                event_context=f"O usuário acabou de me dar uma cutucada (clique) dolorida com o mouse. Minha felicidade atual é de {self.happiness}/100.",
+                callback=self._on_ai_response,
                 fallback=random.choice(phrases)
             )
         else:
@@ -137,7 +143,17 @@ class Penguin:
                     self.hold_offset_y = self.y - mouse_pos[1]
                     self.vx = 0
                     self.vy = 0
-                    self.bubble.set_text(random.choice(["Me solta!", "Socorro!", "Eu tenho labirintite!"]))
+                    
+                    if self.ai_manager.is_enabled:
+                        self.bubble.set_text("...")
+                        self.ai_manager.request_dialogue(
+                            event_context=f"O usuário acabou de me segurar e me levantar com o mouse do computador! Estou pendurado! Felicidade: {self.happiness}/100.",
+                            callback=self._on_ai_response,
+                            fallback=random.choice(["Me solta!", "Socorro!", "Eu tenho labirintite!"])
+                        )
+                    else:
+                        self.bubble.set_text(random.choice(["Me solta!", "Socorro!", "Eu tenho labirintite!"]))
+                        
                     self.bubble.add_buttons([])
                     self.menu.hide()
                     return True
@@ -200,7 +216,15 @@ class Penguin:
                     self.poke()
                 else:
                     self.state = "THROWN"
-                    self.bubble.set_text("WAAAHHH!")
+                    if self.ai_manager.is_enabled:
+                        self.bubble.set_text("...")
+                        self.ai_manager.request_dialogue(
+                            event_context=f"O usuário acabou de me arremessar na tela do computador e eu estou voando! Felicidade: {self.happiness}/100.",
+                            callback=self._on_ai_response,
+                            fallback="WAAAHHH!"
+                        )
+                    else:
+                        self.bubble.set_text("WAAAHHH!")
                 return True
                 
         return False
@@ -251,7 +275,16 @@ class Penguin:
             self.happiness = min(100, self.happiness + 30)
             self.set_state("HAPPY")
             self.audio.play('quack')
-            self.bubble.set_text("Nham nham! Delícia! Obrigado, mestre!")
+            
+            if self.ai_manager.is_enabled:
+                self.bubble.set_text("...")
+                self.ai_manager.request_dialogue(
+                    event_context=f"O usuário acabou de me dar um peixe delicioso! Eu amo peixes! Felicidade: {self.happiness}/100.",
+                    callback=self._on_ai_response,
+                    fallback="Nham nham! Delícia! Obrigado, mestre!"
+                )
+            else:
+                self.bubble.set_text("Nham nham! Delícia! Obrigado, mestre!")
         else:
             self.set_state("GRUMPY")
             self.audio.play('quack')
@@ -264,7 +297,17 @@ class Penguin:
         self.menu.hide()
         self.happiness = min(100, self.happiness + 15)
         self.set_state("HAPPY")
-        self.bubble.set_text("hehe... isso faz cosquinha!")
+        
+        if self.ai_manager.is_enabled:
+            self.bubble.set_text("...")
+            self.ai_manager.request_dialogue(
+                event_context=f"O usuário está fazendo um carinho muito bom em mim. Felicidade: {self.happiness}/100.",
+                callback=self._on_ai_response,
+                fallback="hehe... isso faz cosquinha!"
+            )
+        else:
+            self.bubble.set_text("hehe... isso faz cosquinha!")
+            
         self.bubble.add_buttons([])
         self.substate_expire_time = pygame.time.get_ticks() + 4000
             
@@ -369,10 +412,17 @@ class Penguin:
             if abs(self.vx) < 0.5 and abs(self.vy) < 0.5 and self.y >= floor_y:
                 if self.happiness == 0 and time.time() - getattr(self, 'last_revolt_time', 0) > 120:
                     self.state = "REVOLTED"
-                    self.bubble.set_text("ESTOU REVOLTADO!!")
+                    if self.ai_manager.is_enabled:
+                        self.bubble.set_text("...")
+                        self.ai_manager.request_dialogue(
+                            event_context=f"Acabei de cair no chão depois de ser arremessado. Minha felicidade chegou a ZERO. Estou revoltado com o usuário e vou ameaçá-lo!",
+                            callback=self._on_ai_response,
+                            fallback="ESTOU REVOLTADO!!"
+                        )
+                    else:
+                        self.bubble.set_text("ESTOU REVOLTADO!!")
                 else:
                     self.state = "WANDERING"
-                    self.bubble.set_text("")
                 self.vx = 0
                 self.vy = 0
                 self.last_action_time = time.time()
@@ -431,7 +481,14 @@ class Penguin:
                 # Dá o golpe e foge (Cooldown de 2 minutos antes do próximo ataque)
                 self.state = "WANDERING"
                 self.last_revolt_time = time.time()
-                self.bubble.set_text("Me dê atenção ou eu ataco de novo daqui a pouco!!")
+                if self.ai_manager.is_enabled:
+                    self.ai_manager.request_dialogue(
+                        event_context=f"Acabei de atacar o mouse do usuário porque estava irritado. Vou dar um aviso para ele cuidar melhor de mim.",
+                        callback=self._on_ai_response,
+                        fallback="Me dê atenção ou eu ataco de novo daqui a pouco!!"
+                    )
+                else:
+                    self.bubble.set_text("Me dê atenção ou eu ataco de novo daqui a pouco!!")
                 self.substate_expire_time = now + 4000
                 
         # 2. Atualiza Lógica de Passeio (Wandering)
@@ -489,9 +546,18 @@ class Penguin:
                     
                     if self.ai_manager.is_enabled:
                         self.bubble.set_text("...")
+                        ideias = [
+                            "Conte uma piada bem curta e engraçada.",
+                            "Dê um conselho engraçado ou inútil.",
+                            "Reclame sobre estar com tédio.",
+                            "Fale um fato muito curioso sobre pinguins, gelo ou computadores.",
+                            "Dê uma dica rápida de produtividade para o usuário.",
+                            "Faça uma saudação diga algo sobre o usuário."
+                        ]
+                        ideia_escolhida = random.choice(ideias)
                         self.ai_manager.request_dialogue(
-                            event_context="Estou ocioso no computador. Dê uma dica aleatória sobre tecnologia ou produtividade, ou apenas uma saudação carinhosa.",
-                            callback=lambda t: self.bubble.set_text(t),
+                            event_context=f"Estou ocioso no computador sem fazer nada. Felicidade: {self.happiness}/100. Sua tarefa agora é: {ideia_escolhida}",
+                            callback=self._on_ai_response,
                             fallback=random.choice(phrases)
                         )
                     else:
@@ -501,7 +567,7 @@ class Penguin:
                     self.substate_expire_time = now + 6000
                     
         elif self.state in ["IDLE", "POKED", "GRUMPY", "HAPPY", "CLEANING", "ALERT"]:
-            if now > self.substate_expire_time:
+            if now > self.substate_expire_time and not self.bubble.is_typing:
                 if self.state == "ALERT":
                     if hasattr(self, 'on_alert_ignored') and self.on_alert_ignored:
                         self.on_alert_ignored()
@@ -511,7 +577,6 @@ class Penguin:
                     else:
                         self.state = "WANDERING"
                     self.prop = None
-                    self.bubble.set_text("")
                     self.last_action_time = time.time()
                     
         elif self.state == "POMODORO":

@@ -2,6 +2,7 @@ import threading
 import urllib.request
 import json
 import queue
+import time
 
 class AIManager:
     def __init__(self):
@@ -16,12 +17,10 @@ class AIManager:
         self.worker_thread.start()
         
         self.system_prompt = (
-            "Você é o Doctor Penguin, um pinguim mascote virtual de computador. "
-            "Você mora no PC do usuário e ajuda a cuidar do sistema. "
-            "Você é fofo, inteligente, prestativo e um pouco atrevido. "
-            "Você ama peixes, frio, gelo e a Antártida. "
-            "Suas respostas devem ser SEMPRE curtas (no máximo 10 frases), diretas e em português do Brasil (PT-BR). "
-            "Aja como o mascote interagindo com seu dono e reaja ao contexto fornecido. Não dê explicações extras, não saia do personagem."
+            "Você é o Doctor Penguin, um pinguim mascote virtual de computador. Você mora no PC do usuário e ajuda a cuidar do sistema. "
+            "Você é inteligente, engraçado e um pouco atrevido, você não tem medo de falar o que pensa. Você ama peixes, frio, gelo e a Antártida. "
+            "Suas falas devem ser SEMPRE curtas e direta [no máximo 10 palavras em portugues brasil (PT-BR)]."
+            "Reaja ao contexto fornecido. NÃO dê explicações extras, NÃO saia do personagem."
         )
 
     @property
@@ -45,6 +44,10 @@ class AIManager:
             'fallback': fallback
         })
 
+    def cancel_current(self):
+        """Cancela falas pendentes (útil quando algo muito mais urgente ou manual sobrepõe)."""
+        self.current_task_id += 1
+
     def _worker_loop(self):
         while True:
             req = self.request_queue.get()
@@ -53,8 +56,36 @@ class AIManager:
             if req['task_id'] != self.current_task_id:
                 continue
                 
+            accumulated_contexts = [req['event_context']]
+            final_callback = req['callback']
+            final_fallback = req['fallback']
+            
+            # DEBOUNCE: Espera até 0.8 segundos para ver se o usuário faz um "combo" de ações
+            start_wait = time.time()
+            while time.time() - start_wait < 0.8:
+                if self.current_task_id != req['task_id']:
+                    try:
+                        new_req = self.request_queue.get_nowait()
+                        req = new_req
+                        accumulated_contexts.append(new_req['event_context'])
+                        final_callback = new_req['callback']
+                        final_fallback = new_req['fallback']
+                        # Se acumulou, reseta o tempo para dar chance de acumular mais um pouco!
+                        start_wait = time.time()
+                    except queue.Empty:
+                        break
+                time.sleep(0.1)
+                
+            # Verifica se foi cancelado enquanto aguardava
+            if req['task_id'] != self.current_task_id:
+                continue
+                
             try:
-                prompt = f"Contexto atual do PC ou da interação: {req['event_context']}\nO que você diria para o usuário agora?"
+                if len(accumulated_contexts) > 1:
+                    combined = " E LOGO EM SEGUIDA ".join(accumulated_contexts)
+                    prompt = f"O usuário fez a seguinte sequência rápida de ações com você: {combined}\nO que você diria para o usuário agora como reação a TUDO isso de uma vez?"
+                else:
+                    prompt = f"Contexto atual do PC ou da interação: {accumulated_contexts[0]}\nO que você diria para o usuário agora?"
                 
                 payload = {
                     "model": self.model,
@@ -79,14 +110,14 @@ class AIManager:
                             ai_text = ai_text[1:-1]
                             
                         if ai_text:
-                            req['callback'](ai_text)
+                            final_callback(ai_text)
                         else:
-                            req['callback'](req['fallback'])
+                            final_callback(final_fallback)
                     else:
                         print(f"[AIManager] Erro na API do Ollama (Status {response.status})")
-                        req['callback'](req['fallback'])
+                        final_callback(final_fallback)
             except Exception as e:
                 # Só executa o fallback de erro se ainda for a task atual
                 if req['task_id'] == self.current_task_id:
                     print(f"[AIManager] Erro ao contatar Ollama: {e}")
-                    req['callback'](req['fallback'])
+                    final_callback(final_fallback)

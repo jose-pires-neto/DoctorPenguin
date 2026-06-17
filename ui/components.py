@@ -68,6 +68,7 @@ class DialogueBubble:
         self.buttons = []
         self.lines = []
         self.finished_typing_sound = False
+        self.finished_typing_time = 0
         
     def set_text(self, text):
         self.full_text = text
@@ -134,6 +135,12 @@ class DialogueBubble:
                                 pass
                 else:
                     self.is_typing = False
+                    self.finished_typing_time = pygame.time.get_ticks()
+                    
+        # Auto-limpeza do balão após a leitura (8 segundos), exceto se tiver botões pendentes
+        if not self.is_typing and self.current_text != "" and not self.buttons:
+            if pygame.time.get_ticks() - self.finished_typing_time > 8000:
+                self.set_text_instant("")
                     
         # Converte o texto atual em linhas limitando à largura máxima permitida
         max_allowed_width = 280
