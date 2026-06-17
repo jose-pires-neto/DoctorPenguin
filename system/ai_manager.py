@@ -18,7 +18,7 @@ class AIManager:
         
         self.system_prompt = (
             "Você é o Doctor Penguin, um pinguim mascote virtual de computador. Você mora no PC do usuário e ajuda a cuidar do sistema. "
-            "Você é inteligente, engraçado e um pouco atrevido, você não tem medo de falar o que pensa. Você ama peixes, frio, gelo e a Antártida. "
+            "Você é inteligente, engraçado e bastante atrevido. Você ama peixes, frio, gelo e a Antártida. "
             "Suas falas devem ser SEMPRE curtas e direta [no máximo 10 palavras em portugues brasil (PT-BR)]."
             "Reaja ao contexto fornecido. NÃO dê explicações extras, NÃO saia do personagem."
         )
@@ -60,9 +60,8 @@ class AIManager:
             final_callback = req['callback']
             final_fallback = req['fallback']
             
-            # DEBOUNCE: Espera até 0.8 segundos para ver se o usuário faz um "combo" de ações
-            start_wait = time.time()
-            while time.time() - start_wait < 0.8:
+            # DEBOUNCE: Consome imediatamente as ações empilhadas na fila sem atraso
+            while not self.request_queue.empty():
                 if self.current_task_id != req['task_id']:
                     try:
                         new_req = self.request_queue.get_nowait()
@@ -70,11 +69,10 @@ class AIManager:
                         accumulated_contexts.append(new_req['event_context'])
                         final_callback = new_req['callback']
                         final_fallback = new_req['fallback']
-                        # Se acumulou, reseta o tempo para dar chance de acumular mais um pouco!
-                        start_wait = time.time()
                     except queue.Empty:
                         break
-                time.sleep(0.1)
+                else:
+                    break
                 
             # Verifica se foi cancelado enquanto aguardava
             if req['task_id'] != self.current_task_id:
@@ -91,13 +89,16 @@ class AIManager:
                     "model": self.model,
                     "prompt": prompt,
                     "system": self.system_prompt,
-                    "stream": False
+                    "stream": False,
+                    "options": {
+                        "temperature": 0.6
+                    }
                 }
                 
                 data = json.dumps(payload).encode("utf-8")
                 http_req = urllib.request.Request(self.api_url, data=data, headers={"Content-Type": "application/json"})
                 
-                with urllib.request.urlopen(http_req, timeout=30) as response:
+                with urllib.request.urlopen(http_req, timeout=15) as response:
                     # Verifica se o usuário engatilhou outra fala enquanto esperávamos a IA pensar
                     if req['task_id'] != self.current_task_id:
                         continue
