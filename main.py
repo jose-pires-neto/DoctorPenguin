@@ -4,7 +4,6 @@ import random
 from config import SCREEN_WIDTH, SCREEN_HEIGHT, INVISIBLE_COLOR, RAM_THRESHOLD, RECYCLE_BIN_THRESHOLD, TEMP_THRESHOLD, BATTERY_THRESHOLD, ALERT_COOLDOWN
 from core.window import setup_transparent_window, get_mouse_pos
 from entities.penguin import Penguin
-from entities.fish_drop import FishDrop
 from entities.egg import Egg, BabyPenguin
 from system.monitor import SystemMonitor
 from system.cleaner import Cleaner
@@ -12,6 +11,7 @@ from system.save_manager import SaveManager
 from system.ai_manager import AIManager
 
 def main():
+    
     screen, hwnd = setup_transparent_window("DoctorPenguin")
     
     # Inicializa Entidades
@@ -30,7 +30,6 @@ def main():
     
     app_start_time = time.time()
     last_fish_spawn = time.time()
-    active_fish = None
     
     last_egg_spawn = time.time()
     active_egg = None
@@ -255,12 +254,6 @@ def main():
                         penguin.bubble.set_text("Meu filhote nasceu!! Obrigado por cuidar do ovo!")
                         penguin.bubble.add_buttons([])
                         penguin.substate_expire_time = pygame.time.get_ticks() + 4000
-                
-                # Checa clique no peixe
-                if active_fish and active_fish.check_click(mouse_pos):
-                    save_manager.add_fish()
-                    penguin.audio.play('beep') # Toca um sonzinho
-                    active_fish = None
                     
             # Passa evento para o pinguim e para a UI (se o pinguim tratar, ele retorna True)
             penguin.handle_event(event, mouse_pos)
@@ -279,19 +272,12 @@ def main():
             last_egg_spawn = now
         
         # Sistema de Pesca Aleatória (A cada 3 a 8 minutos)
-        if active_fish is None and now - last_fish_spawn > random.randint(180, 480):
-            active_fish = FishDrop(SCREEN_WIDTH)
+        if now - last_fish_spawn > random.randint(180, 480):
+            penguin.start_fishing()
             last_fish_spawn = now
-            
-        if active_fish:
-            active_fish.update(SCREEN_HEIGHT)
-            if not active_fish.active:
-                active_fish = None
 
         # 4. RENDERIZAÇÃO
         screen.fill(INVISIBLE_COLOR)
-        if active_fish:
-            active_fish.draw(screen)
             
         if active_egg:
             active_egg.draw(screen)

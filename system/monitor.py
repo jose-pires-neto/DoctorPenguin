@@ -1,12 +1,10 @@
 import os
 import threading
-import urllib.request
 import json
 import ctypes
-import threading
 import time
 import psutil
-import urllib.request
+from urllib import request, parse
 from ctypes import wintypes
 
 class SHQUERYRBINFO(ctypes.Structure):
@@ -39,16 +37,18 @@ class SystemMonitor:
         def fetch():
             try:
                 # 1. Pega localidade via IP
-                req = urllib.request.Request("http://ip-api.com/json/", headers={'User-Agent': 'Mozilla/5.0'})
-                with urllib.request.urlopen(req, timeout=5) as response:
+                req = request.Request("http://ip-api.com/json/", headers={'User-Agent': 'Mozilla/5.0'})
+                with request.urlopen(req, timeout=5) as response:
                     data = json.loads(response.read().decode())
                     city = data.get("city", "")
                     
                     if city:
+                        # Codifica o nome da cidade corretamente para lidar com acentos (ex: São José)
+                        safe_city = parse.quote(city)
                         # 2. Pega clima daquela cidade via wttr.in (formato texto limpo)
-                        weather_url = f"https://wttr.in/{city.replace(' ', '+')}?format=%l:+%C,+%t"
-                        req_w = urllib.request.Request(weather_url, headers={'User-Agent': 'curl/7.68.0'})
-                        with urllib.request.urlopen(req_w, timeout=5) as res_w:
+                        weather_url = f"https://wttr.in/{safe_city}?format=%l:+%C,+%t"
+                        req_w = request.Request(weather_url, headers={'User-Agent': 'curl/7.68.0'})
+                        with request.urlopen(req_w, timeout=5) as res_w:
                             self.weather_info = res_w.read().decode('utf-8').strip()
             except Exception as e:
                 print(f"[Monitor] Erro ao buscar clima/local: {e}")
@@ -187,7 +187,7 @@ class SystemMonitor:
         """Retorna True se estiver conectado à internet"""
         try:
             # Conecta a um site real que responda a requisições HTTP rápidas
-            urllib.request.urlopen('http://www.google.com', timeout=2)
+            request.urlopen('http://www.google.com', timeout=2)
             return True
         except:
             return False

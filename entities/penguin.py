@@ -43,10 +43,13 @@ class Penguin:
         # Atributos de Tamagotchi
         self.happiness = 100
         
-        # Estados: WANDERING, HELD, THROWN, ALERT, POKED, IDLE, GRUMPY, HAPPY, CLEANING, POMODORO, REVOLTED
         self.substate_expire_time = pygame.time.get_ticks() + random.randint(WANDER_MIN_TIME, WANDER_MAX_TIME)
         
         self.pomodoro_end = 0
+        
+        # Variáveis de Pesca
+        self.fishing_state = None # "WAITING", "TUG", "PULL"
+        self.fishing_start_time = 0
         
         self.direction_idx = 0
         self.dest_x = x
@@ -258,6 +261,21 @@ class Penguin:
                 return True
                 
         return False
+
+    def start_fishing(self):
+        """Inicia o processo de pesca autônomo"""
+        if self.state in ["WANDERING", "IDLE"]:
+            self.set_state("FISHING")
+            self.prop = "FISHING_ROD"
+            self.fishing_state = "WAITING"
+            self.fishing_start_time = pygame.time.get_ticks()
+            self.vx = 0
+            self.vy = 0
+            # Sorteia o tempo de espera antes da fisgada (3 a 8 segundos)
+            self.substate_expire_time = self.fishing_start_time + random.randint(3000, 8000)
+            # Para ficar de lado (ex: Leste)
+            self.direction_idx = 6 # Leste
+            self.wander_substate = "IDLE_STANDING"
 
     def _trigger_checkup(self):
         self.menu.hide()
@@ -478,6 +496,36 @@ class Penguin:
                 self.bubble.add_buttons([])
                 self.substate_expire_time = now + 5000
                 
+        # 1.5.5. Lógica Fishing
+        elif self.state == "FISHING":
+            # Sem gravidade! O pinguim para exatamente onde está no momento para pescar.
+            self.vx = 0
+            self.vy = 0
+            
+            if self.fishing_state == "WAITING":
+                if now > self.substate_expire_time:
+                    self.fishing_state = "TUG"
+                    self.substate_expire_time = now + 1500 # tempo da fisgada
+                    self.audio.play('boing') # ou som de splash
+                    self.bubble.set_text_instant("!")
+                    self.bubble.add_buttons([])
+            elif self.fishing_state == "TUG":
+                if now > self.substate_expire_time:
+                    self.fishing_state = "PULL"
+                    # Reseta tempo de início para a animação da puxada
+                    self.fishing_start_time = now
+                    self.substate_expire_time = now + 2000 # animação do peixe voando
+                    self.audio.play('quack') # comemorar
+                    self.bubble.set_text("")
+            elif self.fishing_state == "PULL":
+                if now > self.substate_expire_time:
+                    self.save_manager.add_fish()
+                    self.set_state("HAPPY")
+                    self.prop = None
+                    self.bubble.set_text("Pesquei um peixe fresquinho!")
+                    self.bubble.add_buttons([])
+                    self.substate_expire_time = now + 3000
+                    
         # 1.6. Lógica REVOLTED (Física do Mouse)
         elif self.state == "REVOLTED":
             # Persegue o mouse agressivamente
@@ -634,14 +682,22 @@ class Penguin:
         # 3. Atualiza interface (Balão e Botões)
         # Posiciona balão dinamicamente
         ideal_bx = self.x - self.bubble.width / 2
-        ideal_by = self.y - self.bubble.max_height - 90
+        
+        # O alvo do ponteiro (cabeça do pinguim)
+        target_y = self.y - 60
+        
+        # O balão fica SEMPRE pelo menos 45 pixels acima do alvo, 
+        # para que o rabinho nunca fique "esmagado" gerando distorções nas bordas!
+        ideal_by = target_y - self.bubble.max_height - 25
         
         ideal_bx = max(10, min(ideal_bx, SCREEN_WIDTH - self.bubble.width - 10))
-        ideal_by = max(10, min(ideal_by, SCREEN_HEIGHT - self.bubble.max_height - 10))
+        # Nao limitamos o ideal_by estritamente ao topo se isso for esmagar o rabo, 
+        # deixamos subir um pouco pra fora da tela se o pinguim estiver muito no topo
+        ideal_by = min(ideal_by, SCREEN_HEIGHT - self.bubble.max_height - 10)
         
         self.bubble.x = ideal_bx
         self.bubble.y = ideal_by
-        self.bubble.update(mouse_pos)
+        self.bubble.update(mouse_pos, target_x=self.x, target_y=target_y)
         
         self.menu.update(mouse_pos)
         
@@ -683,6 +739,13 @@ class Penguin:
             draw_zzz(screen, self.x, self.y, now_ms)
         elif self.prop == "GLASSES":
             draw_glasses(screen, self.x, self.y)
+        elif self.prop == "FISHING_ROD":
+            from ui.props import draw_ice_hole, draw_fishing_rod
+            # O buraco é desenhado primeiro (atrás do pinguim/vara)
+            is_right = (self.direction_idx in [5, 6, 7] or self.direction_idx == 0)
+            offset_x = 40 if is_right else -40
+            draw_ice_hole(screen, self.x + offset_x, self.y + 40)
+            draw_fishing_rod(screen, self.x, self.y, self.direction_idx, now_ms, getattr(self, 'fishing_state', 'WAITING'), getattr(self, 'fishing_start_time', 0))
             
         if self.bubble.current_text != "":
             self.bubble.draw(screen)
