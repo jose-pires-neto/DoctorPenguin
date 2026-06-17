@@ -93,10 +93,10 @@ class BabyPenguin:
             
         # Draw scaled down
         temp_surf = pygame.Surface((150, 150), pygame.SRCALPHA)
-        self.drawer.draw(temp_surf, 75, 75, state, mouse_pos, self.direction_idx)
+        self.drawer.draw(temp_surf, 75, 140, state, mouse_pos, self.direction_idx)
         
         # Escala pela metade
         scaled_surf = pygame.transform.scale(temp_surf, (75, 75))
         
-        # Blit
-        surface.blit(scaled_surf, (self.x - 37, self.y - 37))
+        # Blit centrado e com a base no lugar certo (70 é a metade de 140)
+        surface.blit(scaled_surf, (self.x - 37, self.y - 70))

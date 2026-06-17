@@ -188,6 +188,8 @@ def main():
             penguin.substate_expire_time = pygame.time.get_ticks() + 4000
             
         def handle_dismiss():
+            penguin.bubble.set_text("")
+            penguin.bubble.add_buttons([])
             penguin.set_state("WANDERING")
             
         def handle_ignore(type="UNKNOWN", target=None):
