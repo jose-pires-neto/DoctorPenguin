@@ -22,7 +22,7 @@ BOUNCE_DAMPING = 0.6
 FRICTION = 0.95
 
 class Penguin:
-    def __init__(self, x, y, save_manager, ai_manager, monitor):
+    def __init__(self, x, y, save_manager, ai_manager, monitor, camera_vision=None):
         self.x = x
         self.y = y
         self.vx = 0
@@ -30,6 +30,7 @@ class Penguin:
         self.save_manager = save_manager
         self.ai_manager = ai_manager
         self.monitor = monitor
+        self.camera_vision = camera_vision  # CameraVisionSystem | None
         
         # Estado e visual
         self.state = "WANDERING" # WANDERING, SITTING, HAPPY, CLEANING, TALKING, GRUMPY, HELD, THROWN, POMODORO, REVOLTED, IDLE
@@ -70,6 +71,10 @@ class Penguin:
         self.on_checkup_request = None
         self.on_exit_request = None
 
+        # Registra callback periódico da câmera
+        if self.camera_vision:
+            self.camera_vision.set_on_vision_ready(self._on_vision_triggered)
+
     def get_app_context(self):
         context_str = ""
         try:
@@ -99,10 +104,42 @@ class Penguin:
         return context_str
 
     def _on_ai_response(self, text):
-        """Callback usado quando o Ollama retorna uma resposta."""
+        """Callback chamado quando a IA retorna uma resposta (pode ser atrasado pelo cascade de fallback)."""
         self.bubble.set_text(text)
-        # Garante no mínimo 7 segundos na tela após a IA responder
-        self.substate_expire_time = max(self.substate_expire_time, pygame.time.get_ticks() + 7000)
+        # Se o pinguim já voltou a passear enquanto a IA pensava, força estado de fala
+        if self.state in ["WANDERING", "IDLE"]:
+            self.state = "IDLE"
+        # Garante no mínimo 9 segundos na tela após a IA responder (tempo suficiente para o TTS terminar)
+        self.substate_expire_time = pygame.time.get_ticks() + 9000
+
+    def _on_vision_triggered(self, vision_ctx):
+        """
+        Callback periódico chamado pelo CameraVisionSystem quando uma captura ocorre.
+        Gera uma reação contextual do pinguim baseada no que ele vê na câmera/tela.
+        Só dispara se o pinguim estiver em estado adequado (não ocupado).
+        """
+        if not self.ai_manager.is_enabled:
+            return
+        if self.state not in ["WANDERING", "IDLE"]:
+            return  # Não interrompe alertas, pomodoro, pesca etc.
+
+        vision_desc = vision_ctx.build_context_description()
+        
+        ideia = "Você acabou de dar uma espiada pela câmera e na tela do usuário. Faça um comentário super curto, atrevido e engraçado sobre o que você está vendo na imagem (a pessoa, o ambiente ou a tela). Se a câmera mostrar que não há absolutamente ninguém na cadeira, faça uma piada reclamando que foi abandonado."
+        
+        context = f"{vision_desc}\n{ideia}\n" + self.get_app_context()
+
+        self.state = "IDLE"
+        self.bubble.set_text("...")
+        self.substate_expire_time = pygame.time.get_ticks() + 12000
+        self.last_action_time = time.time()
+
+        self.ai_manager.request_dialogue_with_vision(
+            vision_context=vision_ctx,
+            event_context=context,
+            callback=self._on_ai_response,
+            fallback="Ei! Estou de olho em você!" if vision_ctx.user_present else "Cadê você?!"
+        )
         
     def reload_color(self):
         """Atualiza o drawer com a nova cor recarregada do save manager"""
@@ -147,7 +184,8 @@ class Penguin:
             
         self.bubble.add_buttons([])
         self.last_action_time = time.time()
-        self.substate_expire_time = pygame.time.get_ticks() + 3000 # Volta a passear depois de 3 segundos
+        # 12s para dar tempo ao cascade de fallback (Gemma pode demorar até 10s na primeira tentativa)
+        self.substate_expire_time = pygame.time.get_ticks() + 12000
 
     def handle_event(self, event, mouse_pos):
         hitbox = self.drawer.get_hitbox(self.x, self.y)
@@ -226,9 +264,11 @@ class Penguin:
                             },
                             {
                                 'text': '🤖 IA ►',
-                                'submenu': [
-                                    {'text': ai_text, 'callback': self._toggle_ai}
-                                ]
+                                'submenu': self._get_ai_submenu()
+                            },
+                            {
+                                'text': '📷 Câmera ►',
+                                'submenu': self._get_camera_submenu()
                             },
                             {
                                 'text': '🗣️ Voz ►',
@@ -383,6 +423,132 @@ class Penguin:
             self.bubble.set_text("IA Desativada. Voltando a ser um pinguim simples.")
         self.bubble.add_buttons([])
         self.substate_expire_time = pygame.time.get_ticks() + 4000
+
+    def _get_ai_submenu(self):
+        ai_text = 'Desativar IA' if self.save_manager.is_ai_enabled() else 'Ativar IA'
+        current_model = self.save_manager.get_ai_model()
+        current_cloud = self.save_manager.get_cloud_model()
+        
+        local_text = "✅ Local (Ollama)" if current_model == "local" else "Local (Ollama)"
+        cloud_text = "✅ Nuvem" if current_model == "cloud" else "Nuvem"
+        
+        gemini2_text = "✅ Gemini 2.0 Flash" if current_cloud == "gemini-2.0-flash" else "Gemini 2.0 Flash"
+        gemini25_text = "✅ Gemini 2.5 Flash" if current_cloud == "gemini-2.5-flash" else "Gemini 2.5 Flash"
+        gemma_text = "✅ Gemma 4" if current_cloud == "gemma-4-31b-it" else "Gemma 4"
+        
+        return [
+            {'text': ai_text, 'callback': self._toggle_ai},
+            {'text': local_text, 'callback': lambda: self._set_ai_model("local")},
+            {
+                'text': cloud_text + ' ►', 
+                'submenu': [
+                    {'text': gemini2_text, 'callback': lambda: self._set_cloud_model("gemini-2.0-flash")},
+                    {'text': gemini25_text, 'callback': lambda: self._set_cloud_model("gemini-2.5-flash")},
+                    {'text': gemma_text, 'callback': lambda: self._set_cloud_model("gemma-4-31b-it")},
+                ]
+            }
+        ]
+
+    def _get_camera_submenu(self):
+        """Retorna o submenu de controle da câmera de visão."""
+        if not self.camera_vision:
+            return [{'text': 'Câmera indisponível', 'callback': lambda: None}]
+        
+        cam_enabled = self.camera_vision.is_enabled()
+        cam_available = self.camera_vision.is_camera_available()
+        cam_probing = self.camera_vision.is_probing()
+        
+        toggle_text = '✅ Visão Ativa' if cam_enabled else '👁️ Ativar Visão'
+        
+        items = []
+        
+        if cam_probing:
+            items.append({'text': 'Detectando câmera...', 'callback': lambda: None})
+        elif not cam_available and not cam_enabled:
+            items.append({'text': '⚠️ Sem câmera detectada', 'callback': lambda: None})
+        
+        items.append({'text': toggle_text, 'callback': self._toggle_camera})
+        
+        if cam_enabled:
+            items.append({'text': '📸 Ver agora', 'callback': self._camera_capture_now})
+        
+        return items
+
+    def _set_ai_model(self, model_type):
+        self.save_manager.set_ai_model(model_type)
+        self.menu.hide()
+        
+    def _set_cloud_model(self, model_name):
+        self.save_manager.set_ai_model("cloud")
+        self.save_manager.set_cloud_model(model_name)
+        self.menu.hide()
+
+    def _toggle_camera(self):
+        """Ativa ou desativa o sistema de visão por câmera."""
+        self.menu.hide()
+        if not self.camera_vision:
+            return
+
+        currently_enabled = self.camera_vision.is_enabled()
+
+        if currently_enabled:
+            # Desativar
+            self.camera_vision.enable(False)
+            self.set_state("HAPPY")
+            self.bubble.set_text("Olhos fechados! Prometo não espiar mais.")
+            self.bubble.add_buttons([])
+            self.substate_expire_time = pygame.time.get_ticks() + 4000
+        else:
+            # Primeira vez: mostra diálogo de permissão
+            if not self.save_manager.is_camera_permission_granted():
+                self.set_state("ALERT")
+                self.bubble.set_text(
+                    "Posso usar a câmera do PC para te ver e reagir ao seu ambiente?\n"
+                    "Vou olhar de vez em quando e descrever o que vejo!\n"
+                    "(Nada é gravado — só envio ao Gemma 4 para gerar comentários)"
+                )
+                self.bubble.add_buttons([
+                    {'text': 'Permitir!', 'callback': self._grant_camera_permission},
+                    {'text': 'Não, obrigado', 'callback': self._deny_camera_permission}
+                ])
+                self.substate_expire_time = pygame.time.get_ticks() + 20000
+            else:
+                # Permissão já concedida, só ativa
+                self._activate_camera()
+
+    def _grant_camera_permission(self):
+        """Usuário concedeu permissão de câmera."""
+        self.save_manager.grant_camera_permission()
+        self._activate_camera()
+        self.bubble.add_buttons([])
+
+    def _deny_camera_permission(self):
+        """Usuário negou permissão de câmera."""
+        self.set_state("HAPPY")
+        self.bubble.set_text("Tudo bem! Respeito sua privacidade, mestre.")
+        self.bubble.add_buttons([])
+        self.substate_expire_time = pygame.time.get_ticks() + 4000
+
+    def _activate_camera(self):
+        """Ativa o sistema de câmera após permissão concedida."""
+        self.camera_vision.enable(True)
+        self.set_state("HAPPY")
+        self.bubble.set_text("Olhos abertos! Vou te observar de vez em quando...")
+        self.bubble.add_buttons([])
+        self.substate_expire_time = pygame.time.get_ticks() + 4000
+
+    def _camera_capture_now(self):
+        """Dispara uma captura de câmera imediata (on-demand)."""
+        self.menu.hide()
+        if not self.camera_vision or not self.camera_vision.is_enabled():
+            return
+
+        self.set_state("IDLE")
+        self.bubble.set_text("Deixa eu dar uma espiada...")
+        self.bubble.add_buttons([])
+        self.substate_expire_time = pygame.time.get_ticks() + 12000
+
+        self.camera_vision.capture_now_async(self._on_vision_triggered)
 
     def _get_voice_submenu(self):
         voice_text = 'Desativar Voz' if self.save_manager.is_voice_enabled() else 'Ativar Voz'
@@ -693,11 +859,15 @@ class Penguin:
                         self.bubble.set_text(random.choice(phrases))
                         
                     self.last_action_time = time.time()
-                    self.substate_expire_time = now + 6000
+                    # 12s para aguardar o cascade de fallback sem piscar
+                    self.substate_expire_time = now + 12000
                     
         elif self.state in ["IDLE", "POKED", "GRUMPY", "HAPPY", "CLEANING", "ALERT"]:
             if now > self.substate_expire_time and not self.bubble.is_typing:
-                if self.state == "ALERT":
+                # Se for um ALERT esperando a IA pensar, estende o tempo!
+                if self.state == "ALERT" and self.bubble.full_text == "...":
+                    self.substate_expire_time = now + 5000
+                elif self.state == "ALERT":
                     if hasattr(self, 'on_alert_ignored') and self.on_alert_ignored:
                         self.on_alert_ignored()
                 else:

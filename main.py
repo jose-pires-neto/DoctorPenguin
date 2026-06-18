@@ -9,6 +9,33 @@ from system.monitor import SystemMonitor
 from system.cleaner import Cleaner
 from system.save_manager import SaveManager
 from system.ai_manager import AIManager
+from system.camera_vision import CameraVisionSystem
+
+def _draw_camera_indicator(screen):
+    """Desenha ícone de câmera piscando por 5s após uma captura. Depois some."""
+    # Pisca rapidamente (8x por segundo) para chamar atenção brevemente
+    if int(time.time() * 8) % 2 == 0:
+        return  # Metade do tempo apagado = efeito pisca-pisca
+
+    x, y = 12, 12
+    GREEN = (40, 210, 80)
+    DARK  = (10, 30, 10)
+    WHITE = (240, 255, 240)
+    # Fundo escuro
+    pygame.draw.rect(screen, DARK,  (x - 4, y - 4, 44, 34), border_radius=8)
+    # Corpo da câmera
+    pygame.draw.rect(screen, GREEN, (x,      y + 5, 30, 18), border_radius=4)
+    # Saliência superior (visor)
+    pygame.draw.rect(screen, GREEN, (x + 10, y,     10,  7), border_radius=3)
+    # Lente exterior
+    pygame.draw.circle(screen, DARK,  (x + 15, y + 14), 7)
+    # Lente interior
+    pygame.draw.circle(screen, GREEN, (x + 15, y + 14), 4)
+    # Reflexo
+    pygame.draw.circle(screen, WHITE, (x + 13, y + 12), 1)
+    # Ponto vermelho de "em uso"
+    pygame.draw.circle(screen, (220, 50, 50), (x + 34, y + 5), 3)
+
 
 def main():
     
@@ -16,11 +43,12 @@ def main():
     
     # Inicializa Entidades
     save_manager = SaveManager()
-    ai_manager = AIManager()
+    ai_manager = AIManager(save_manager)
     ai_manager.enable(save_manager.is_ai_enabled())
     monitor = SystemMonitor()
+    camera_vision = CameraVisionSystem(save_manager)
     cleaner = Cleaner()
-    penguin = Penguin(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2, save_manager, ai_manager, monitor)
+    penguin = Penguin(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2, save_manager, ai_manager, monitor, camera_vision)
     
     clock = pygame.time.Clock()
     running = True
@@ -188,9 +216,11 @@ def main():
             penguin.substate_expire_time = pygame.time.get_ticks() + 4000
             
         def handle_dismiss():
+            nonlocal cooldown_until
             penguin.bubble.set_text("")
             penguin.bubble.add_buttons([])
             penguin.set_state("WANDERING")
+            cooldown_until = time.time() + (ALERT_COOLDOWN / 1000.0) # Espera antes de perturbar de novo
             
         def handle_ignore(type="UNKNOWN", target=None):
             nonlocal cooldown_until
@@ -288,6 +318,10 @@ def main():
             baby_penguin.draw(screen, mouse_pos)
             
         penguin.draw(screen, mouse_pos)
+
+        # Indicador de câmera: pisca por 5s logo após uma captura, depois some
+        if now - camera_vision.last_capture_time < 5.0:
+            _draw_camera_indicator(screen)
         
         pygame.display.flip()
         clock.tick(60)

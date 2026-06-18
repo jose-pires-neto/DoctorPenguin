@@ -57,7 +57,8 @@ class VoiceSystem:
             # Tenta pela nuvem primeiro se for uma voz neural
             if is_edge:
                 try:
-                    temp_file = "temp_voice.mp3"
+                    import tempfile
+                    temp_file = os.path.join(tempfile.gettempdir(), "penguin_temp_voice.mp3")
                     communicate = edge_tts.Communicate(text, voice_id)
                     asyncio.run(communicate.save(temp_file))
                     

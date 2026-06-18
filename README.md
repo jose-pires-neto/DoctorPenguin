@@ -9,11 +9,23 @@ E mais: ele possui **integração nativa com Inteligência Artificial** (via Oll
 ## ✨ Funcionalidades
 
 - **Mascote de Mesa com Vida Própria:** O pinguim anda livremente por cima das suas janelas, com animações em 8 direções. Se ficar entediado, ele pode abrir um buraco de gelo no seu monitor para **pescar** sozinho ou botar **ovos** interativos.
-- **Integração com I.A (Ollama):** Faça carinho ou clique no pinguim para interagir. Se o Ollama estiver rodando na sua máquina, o pinguim gerará diálogos dinâmicos baseados no que você está fazendo (ele sabe qual programa está aberto e reage ao contexto!).
+- **Integração com I.A:** O pinguim gera diálogos dinâmicos baseados no que você está fazendo (ele sabe qual programa está aberto e reage ao contexto!). Você pode escolher usar um modelo **Local (Ollama)** para privacidade total, ou um modelo **Cloud (Google Gemma 4 / Gemini)** que é super rápido e não consome processamento do seu PC!
 - **Animações de UI Orgânicas:** O balão de diálogo possui efeitos vivos de flutuação e respiração. Quando ele está "pensando", uma nuvem animada autêntica aparece no estilo clássico de quadrinhos.
 - **Monitoramento de RAM:** Detecta se a sua memória RAM ultrapassar o limite seguro e identifica qual processo está devorando mais memória.
 - **Limpeza de Lixeira e Temporários:** Fica de olho no acúmulo de lixo. Se a lixeira passar dos limites ou a pasta `Temp` lotar, ele sugere uma faxina.
 - **Ações Rápidas:** Botões diretamente no balão de fala permitem que você autorize a limpeza ou encerre processos pesados com um simples clique.
+
+## 🧠 Configurando a I.A na Nuvem (Google AI Studio)
+
+Por padrão, você pode usar a IA na nuvem (Google Gemini/Gemma 4) para processamento instantâneo sem consumir seu hardware. Para configurar:
+
+1. Acesse o [Google AI Studio](https://aistudio.google.com/) e crie uma nova API Key.
+2. Na pasta do projeto (junto do arquivo `main.py`), crie um arquivo chamado `.env`
+3. Cole a sua API Key dentro dele dessa forma:
+   ```env
+   GEMINI_API_KEY=sua_chave_secreta_aqui
+   ```
+4. Pronto! O Pinguim carregará a chave automaticamente e você poderá alternar entre os modelos clicando com o botão direito nele e acessando `IA > Nuvem`.
 
 ## 🚀 Como instalar e executar
 

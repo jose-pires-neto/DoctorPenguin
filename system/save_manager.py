@@ -26,8 +26,12 @@ class SaveManager:
             "ignored_processes": {},
             "penguin_color": None,
             "ai_enabled": False,
+            "ai_model_type": "cloud",
+            "cloud_model": "gemma-4-31b-it",
             "voice_enabled": False,
-            "voice_id": None
+            "voice_id": None,
+            "camera_enabled": False,
+            "camera_permission_granted": False
         }
 
     def _save(self):
@@ -93,6 +97,22 @@ class SaveManager:
     def is_ai_enabled(self):
         return self.data.get("ai_enabled", False)
 
+    def set_ai_model(self, model_type):
+        """Salva o modelo de IA selecionado ('local' ou 'cloud')"""
+        self.data["ai_model_type"] = model_type
+        self._save()
+        
+    def get_ai_model(self):
+        """Retorna o modelo de IA selecionado ('local' ou 'cloud')"""
+        return self.data.get("ai_model_type", "cloud")
+        
+    def set_cloud_model(self, model_name):
+        self.data["cloud_model"] = model_name
+        self._save()
+        
+    def get_cloud_model(self):
+        return self.data.get("cloud_model", "gemma-4-31b-it")
+
     def is_voice_enabled(self):
         return self.data.get("voice_enabled", False)
 
@@ -107,3 +127,20 @@ class SaveManager:
         self.data["voice_id"] = voice_id
         self._save()
 
+    # --- Camera Vision ---
+
+    def is_camera_enabled(self) -> bool:
+        return self.data.get("camera_enabled", False)
+
+    def set_camera_enabled(self, status: bool):
+        self.data["camera_enabled"] = status
+        self._save()
+
+    def is_camera_permission_granted(self) -> bool:
+        """Retorna True se o usuário já concedeu permissão de câmera alguma vez."""
+        return self.data.get("camera_permission_granted", False)
+
+    def grant_camera_permission(self):
+        """Marca que o usuário concedeu permissão de câmera."""
+        self.data["camera_permission_granted"] = True
+        self._save()
