@@ -84,8 +84,12 @@ def get_mouse_pos():
     """
     Retorna a posição do mouse na tela ajustada para as coordenadas do Pygame.
     """
-    pos = win32api.GetCursorPos()
-    return (pos[0] - SCREEN_X, pos[1] - SCREEN_Y)
+    try:
+        pos = win32api.GetCursorPos()
+        return (pos[0] - SCREEN_X, pos[1] - SCREEN_Y)
+    except Exception:
+        # Fallback when desktop is locked or monitor disconnected (Access Denied)
+        return (-1000, -1000)
 
 def get_floor_y(px, py):
     """
