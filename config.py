@@ -9,7 +9,7 @@ SM_CYVIRTUALSCREEN = 79
 SCREEN_X = win32api.GetSystemMetrics(SM_XVIRTUALSCREEN)
 SCREEN_Y = win32api.GetSystemMetrics(SM_YVIRTUALSCREEN)
 SCREEN_WIDTH = win32api.GetSystemMetrics(SM_CXVIRTUALSCREEN)
-SCREEN_HEIGHT = win32api.GetSystemMetrics(SM_CYVIRTUALSCREEN)
+SCREEN_HEIGHT = win32api.GetSystemMetrics(SM_CYVIRTUALSCREEN) - 1
 
 # --- CORES E CONFIGURAÇÕES VISUAIS ---
 # Cor usada como chave de transparência (chroma key) no Pygame/Windows

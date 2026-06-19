@@ -38,10 +38,11 @@ def setup_transparent_window(title="DoctorPenguin"):
     # Obtém o handle (HWND) da janela recém-criada
     hwnd = win32gui.FindWindow(None, title)
     
-    # Configura os estilos estendidos (Layered e Topmost)
+    # Configura os estilos estendidos (Layered, Topmost e Toolwindow)
     # WS_EX_LAYERED permite transparência por chroma key ou alpha
+    # WS_EX_TOOLWINDOW oculta o app da barra de tarefas e do Alt+Tab
     ex_style = win32gui.GetWindowLong(hwnd, win32con.GWL_EXSTYLE)
-    ex_style |= win32con.WS_EX_LAYERED | win32con.WS_EX_TOPMOST
+    ex_style |= win32con.WS_EX_LAYERED | win32con.WS_EX_TOPMOST | win32con.WS_EX_TOOLWINDOW
     win32gui.SetWindowLong(hwnd, win32con.GWL_EXSTYLE, ex_style)
     
     # Força a janela a ser TOPMOST usando SetWindowPos (muito mais confiável que apenas a flag)

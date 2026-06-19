@@ -241,11 +241,6 @@ class AIManager:
             req = self.request_queue.get()
             is_vision = req.get('is_vision', False)
 
-            # Verifica cancelação: visão NUNCA é cancelada por novos diálogos de texto
-            if not is_vision and req['task_id'] != self.current_task_id:
-                print(f"[AIManager] Requisição de texto #{req['task_id']} descartada (task atual: {self.current_task_id})")
-                continue
-
             accumulated_contexts = [req['event_context']]
             final_callback = req['callback']
             final_fallback = req['fallback']
